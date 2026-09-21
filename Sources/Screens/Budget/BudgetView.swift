@@ -157,6 +157,14 @@ struct BudgetView: View {
                     Text(Money.wholeDollars(balance))
                         .foregroundStyle(statusColor(status))
                 }
+                GeometryReader { geometry in
+                    let ratio = assigned > 0 ? min(Double(spent) / Double(assigned), 1) : (spent > 0 ? 1 : 0)
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.white.opacity(0.1))
+                        Capsule().fill(statusColor(status)).frame(width: geometry.size.width * ratio)
+                    }
+                }
+                .frame(height: 4)
                 Text("Spent \(Money.wholeDollars(spent)) of \(Money.wholeDollars(assigned))")
                     .font(.caption)
                     .foregroundStyle(.secondary)

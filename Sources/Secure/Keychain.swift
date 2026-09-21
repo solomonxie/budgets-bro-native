@@ -47,4 +47,5 @@ enum SecretKey {
     static let aiAPIKey = "ai_api_key"
     static let s3AccessKeyID = "s3_access_key_id"
     static let s3SecretAccessKey = "s3_secret_access_key"
+    static let appPasscode = "app_lock_passcode"
 }
