@@ -90,13 +90,16 @@ Domain rules already designed in the original's `docs/DESIGN.md` — port logic,
 - [x] T8.1 App Lock: Off / passcode / Face ID (`AppLockController`, `LockScreenView`) — passcode in the Keychain (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`), biometrics via `LAContext`'s `.deviceOwnerAuthentication` (falls back to device passcode, same guarantee as the original's `BIOMETRY_ANY_OR_DEVICE_PASSCODE`), 60s grace period on foreground
 
 ## Known UI/UX gaps against the spec (tracked, not hidden)
-- [x] ~~Tab bar renders as a floating translucent pill~~ — fixed: `RootTabView` now hand-rolls the bottom bar (`BottomTabBar`) instead of using SwiftUI's `TabView` chrome at all, giving the flush, opaque, edge-to-edge bar `components.md` calls for
-- [x] ~~Pickers are plain `Picker`s, not the fuzzy-search sheet convention~~ — fixed for Add Transaction's account/category/payee fields via `SearchablePickerSheet` (substring match, not true fuzzy matching — reasonable simplification, noted in that file). Other pickers in the app (account type, S3 currency codes, etc.) are short enough lists that a plain `Picker` is the right call, not a gap
+- [x] ~~Tab bar renders as a floating translucent pill~~ — fixed: `RootTabView` now hand-rolls the bottom bar (`BottomTabBar`) instead of using SwiftUI's `TabView` chrome at all, giving the flush, opaque, edge-to-edge bar `components.md` calls for. Its bottom padding was also overshooting the safe area (an extra 28pt stacked on top of the system inset, reading as "far from the screen edge") — trimmed to 6pt
+- [x] ~~Pickers are plain `Picker`s/sheets, not the in-place expanding convention~~ — fixed properly this time: read `ExpandingField.tsx`/`DropdownField.tsx` directly and rebuilt Add Transaction's Payee/Category/Account fields as true inline-expanding panels (one open at a time, unfolds directly under its own row and pushes the rest of the form down), not a `.sheet`. The first pass at this (a `SearchablePickerSheet` modal) was the wrong mechanism entirely, not just a style mismatch — removed
 - [x] ~~Backup destinations are three separate Settings sections~~ — fixed: unified into one "Backup" section, each destination a row with a subtitle and a `⋯` menu (Backup Now / Restore Latest / Delete Connection), matching `design/uiux/settings.md`
 - [x] ~~No drag-reorder for category groups/categories~~ — fixed via Move Up/Down in each group's/category's `⋯`/context menu (same choice the original made over drag gestures — see its Phase 5 note on `react-native-gesture-handler`)
+- [x] ~~Month nav is arrows only, no jump-to-month~~ — fixed: `Sources/Screens/Shared/MonthNav.swift` ports `MonthNav.tsx` exactly, tapping the label unfolds a native wheel `DatePicker` in place (not a sheet) with a Done button; shared by Budget and Insights
+- [x] ~~Net Worth / mortgage equity trend charts were flat lines~~ — a real bug, not just a simplification: `resolvedBalanceCentsAsOf` (and `LoanRepository.valueCents(asOf:)`) now resolve each historical month against the value/principal reading actually current *as of that date*, instead of holding today's figure flat across the whole window
+- [x] Settings' Payees section removed by request — payees are still matched/created by name from Add Transaction, just no longer independently manageable from Settings
 - S3 Settings form has no paste-to-fill, no per-connection multiple buckets (one connection only), no folder browser
 - AI Analysis has no "About You" profile or Health/Comparison modes — just spending-by-category + optional detailed transactions
-- Transaction entry: no "Advanced" collapsible section, no payee-based transfer detection, split transactions not supported
+- Transaction entry: no payee-based transfer detection
 
 ## Backlog
 Not sequenced — pick up opportunistically, and only after the corresponding

@@ -88,11 +88,9 @@ final class AccountsRepository {
         return resolvedBalanceCents(account: account)
     }
 
-    /// Balance through a given date (inclusive) — the Net Worth trend
-    /// chart's per-month point. Simplified vs. the original's
-    /// `useNetWorthTrend`: reads opening + transactions only, so a
-    /// tracking/asset/mortgage account shows flat between loggings rather
-    /// than a value-history-aware curve — noted here rather than hidden.
+    /// Ledger balance through a given date (inclusive) — correct for
+    /// checking/savings/credit/cash. A tracking/asset/loan/mortgage account
+    /// overrides this via `resolvedBalanceCentsAsOf` below.
     func balanceCentsAsOf(accountId: Int, throughDate: String) -> Int {
         database.query(
             """
@@ -105,6 +103,21 @@ final class AccountsRepository {
             [throughDate, accountId],
             row: { $0.int(0) }
         ).first ?? 0
+    }
+
+    /// The Net Worth trend chart's real per-month point — a
+    /// tracking/asset account's is whatever value was logged as of that
+    /// date, a loan/mortgage's is negative remaining principal as of that
+    /// date, both a real curve instead of today's figure held flat.
+    func resolvedBalanceCentsAsOf(account: Account, throughDate: String) -> Int {
+        if account.type.usesLoggedValue {
+            return loanRepo.valueCents(accountId: account.id, kind: "value", asOf: throughDate) ?? balanceCentsAsOf(accountId: account.id, throughDate: throughDate)
+        }
+        if account.type.isLoanLike {
+            let principal = loanRepo.valueCents(accountId: account.id, kind: "principal", asOf: throughDate) ?? abs(account.openingBalanceCents)
+            return -principal
+        }
+        return balanceCentsAsOf(accountId: account.id, throughDate: throughDate)
     }
 
     /// One query for every account's ledger balance, then resolved-balance

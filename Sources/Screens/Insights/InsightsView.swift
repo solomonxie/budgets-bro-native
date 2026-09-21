@@ -50,7 +50,7 @@ struct InsightsView: View {
             Theme.page.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    monthNav
+                    MonthNav(month: $month, onChange: reload)
                     breakdownCard
                     topCategoriesCard
                     trendCard
@@ -65,19 +65,6 @@ struct InsightsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { reload() }
         .onReceive(NotificationCenter.default.publisher(for: .boardDidChange)) { _ in reload() }
-    }
-
-    private var monthNav: some View {
-        HStack {
-            Button { shiftMonth(by: -1) } label: { Image(systemName: "chevron.left") }
-            Spacer()
-            Text(month).font(.headline)
-            Spacer()
-            Button { shiftMonth(by: 1) } label: { Image(systemName: "chevron.right") }
-        }
-        .foregroundStyle(Theme.text)
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
     }
 
     private var breakdownCard: some View {
@@ -274,15 +261,6 @@ struct InsightsView: View {
         let display = DateFormatter()
         display.dateFormat = "MMM"
         return display.string(from: date)
-    }
-
-    private func shiftMonth(by delta: Int) {
-        var components = DateComponents()
-        components.month = delta
-        if let newDate = Calendar.current.date(byAdding: components, to: parseDate(month + "-01")) {
-            month = monthString(from: newDate)
-            reload()
-        }
     }
 
     private func reload() {
