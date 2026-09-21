@@ -29,6 +29,7 @@ struct SettingsView: View {
     @State private var s3SecretKey = ""
     @State private var s3StatusMessage: String?
     @State private var isBusyWithS3 = false
+    @State private var isAddingS3 = false
 
     @State private var isImportingYNAB = false
     @State private var importMessage: String?
@@ -39,9 +40,7 @@ struct SettingsView: View {
                 appLockSection
                 payeesSection
                 aiKeysSection
-                localBackupSection
-                iCloudBackupSection
-                s3Section
+                backupSection
                 dataSection
             }
             .navigationTitle("Settings")
@@ -168,73 +167,78 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: Local Backup
+    // MARK: Backup — one list of destinations, per-row ⋯ menu, per
+    // docs/design/uiux/settings.md's "Backup destinations" convention.
 
-    private var localBackupSection: some View {
+    private var backupSection: some View {
         Section {
-            Text("Every sync writes a full copy of this board to the app's own files. Visible in the Files app under \"On My iPhone\" on a real device build.")
+            Text("Every sync writes a full copy of this board's data.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            ForEach(localBackups) { file in
-                Button {
-                    restoreConfirmFile = file
-                } label: {
-                    HStack {
-                        Text(file.name).lineLimit(1)
-                        Spacer()
-                        Text(ByteCountFormatter.string(fromByteCount: Int64(file.sizeBytes), countStyle: .file))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+
+            destinationRow(name: "This device", subtitle: localBackups.first.map { "Last: \($0.name)" } ?? "No backups yet") {
+                Button("Backup Now") { createLocalBackup() }
+                if let latest = localBackups.first {
+                    Button("Restore Latest") { restoreConfirmFile = latest }
+                }
+                ForEach(localBackups) { file in
+                    Button("Delete \(file.name)", role: .destructive) {
+                        try? LocalBackupRepository.delete(file)
+                        reload()
                     }
                 }
-                .foregroundStyle(.primary)
             }
-            .onDelete { offsets in
-                for index in offsets {
-                    try? LocalBackupRepository.delete(localBackups[index])
-                }
-                reload()
-            }
-            Button("+ Backup Now") { createLocalBackup() }
-                .foregroundStyle(Theme.accent)
-            if let localBackupMessage {
-                Text(localBackupMessage).font(.caption).foregroundStyle(.secondary)
-            }
-        } header: {
-            Text("Local Backup")
-        }
-    }
 
-    // MARK: iCloud Backup
-
-    private var iCloudBackupSection: some View {
-        Section {
             if ICloudBackupRepository.isAvailable {
-                ForEach(iCloudBackups) { file in
-                    Text(file.name).lineLimit(1)
-                }
-                Button("+ Backup Now") { createICloudBackup() }
-                    .foregroundStyle(Theme.accent)
-                if let latest = iCloudBackups.first {
-                    Button("Restore Latest from iCloud") { restoreICloud(latest) }
+                destinationRow(name: "iCloud", subtitle: iCloudBackups.first.map { "Last: \($0.name)" } ?? "No backups yet") {
+                    Button("Backup Now") { createICloudBackup() }
+                    if let latest = iCloudBackups.first {
+                        Button("Restore Latest") { restoreICloud(latest) }
+                    }
                 }
             } else {
-                Text("iCloud isn't available on this build yet — needs the iCloud container entitlement and a signed-in iCloud account. See docs/IMPLEMENTATION_PLAN.md.")
+                Text("iCloud isn't available on this build yet — needs the iCloud container entitlement and a signed-in iCloud account.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            if let iCloudMessage {
-                Text(iCloudMessage).font(.caption).foregroundStyle(.secondary)
+
+            if hasS3Config {
+                destinationRow(name: s3Bucket, subtitle: "s3://\(s3Bucket)/\(s3Prefix)") {
+                    Button("Backup Now") { backupS3() }
+                    Button("Restore Latest") { restoreS3() }
+                    Button("Delete Connection", role: .destructive) { deleteS3Config() }
+                }
+            } else if isAddingS3 {
+                s3Form
+            } else {
+                Button("+ Add S3 Backup") { isAddingS3 = true }.foregroundStyle(Theme.accent)
+            }
+
+            if let message = localBackupMessage ?? iCloudMessage ?? s3StatusMessage {
+                Text(message).font(.caption).foregroundStyle(.secondary)
             }
         } header: {
-            Text("iCloud Backup")
+            Text("Backup")
         }
     }
 
-    // MARK: S3
+    private func destinationRow(name: String, subtitle: String, @ViewBuilder menu: () -> some View) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name).lineLimit(1)
+                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Menu {
+                menu()
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+        }
+    }
 
-    private var s3Section: some View {
-        Section {
+    private var s3Form: some View {
+        VStack(alignment: .leading, spacing: 8) {
             TextField("Bucket", text: $s3Bucket).autocorrectionDisabled()
             TextField("Region", text: $s3Region).autocorrectionDisabled()
             TextField("Folder (key prefix)", text: $s3Prefix).autocorrectionDisabled()
@@ -242,18 +246,9 @@ struct SettingsView: View {
             SecureField("Secret Access Key", text: $s3SecretKey).autocorrectionDisabled()
             Button(isBusyWithS3 ? "Validating…" : "Save & Validate") { saveAndValidateS3() }
                 .disabled(isBusyWithS3 || s3Bucket.isEmpty || s3AccessKey.isEmpty || s3SecretKey.isEmpty)
-            if hasS3Config {
-                Button("Backup Now") { backupS3() }
-                Button("Restore Latest") { restoreS3() }
-            }
-            if let s3StatusMessage {
-                Text(s3StatusMessage).font(.caption).foregroundStyle(.secondary)
-            }
             Text("Secrets are stored in the Keychain, never in the database or any export.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-        } header: {
-            Text("S3 Backup")
         }
     }
 
@@ -349,6 +344,7 @@ struct SettingsView: View {
                 await MainActor.run {
                     s3StatusMessage = "Validated and saved."
                     isBusyWithS3 = false
+                    isAddingS3 = false
                 }
             } catch {
                 await MainActor.run {
@@ -381,6 +377,19 @@ struct SettingsView: View {
                 await MainActor.run { s3StatusMessage = error.localizedDescription; isBusyWithS3 = false }
             }
         }
+    }
+
+    private func deleteS3Config() {
+        Keychain.remove(SecretKey.s3AccessKeyID)
+        Keychain.remove(SecretKey.s3SecretAccessKey)
+        appSettings.set("s3_bucket", nil)
+        appSettings.set("s3_region", nil)
+        appSettings.set("s3_prefix", nil)
+        s3Bucket = ""
+        s3Region = "us-east-1"
+        s3Prefix = ""
+        s3AccessKey = ""
+        s3SecretKey = ""
     }
 
     private func importYNAB(_ result: Result<URL, Error>) {

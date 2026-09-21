@@ -56,6 +56,10 @@ struct CategoryGroup: Identifiable, Hashable {
     var sortOrder: Int
 }
 
+enum CategoryTargetType: String {
+    case monthly
+}
+
 struct Category: Identifiable, Hashable {
     var id: Int
     var groupId: Int
@@ -63,6 +67,8 @@ struct Category: Identifiable, Hashable {
     var icon: String?
     var sortOrder: Int
     var archivedAt: String?
+    var targetCents: Int?
+    var targetType: CategoryTargetType?
 
     var displayName: String {
         if let icon, !icon.isEmpty { return "\(icon) \(name)" }
@@ -81,11 +87,36 @@ struct Transaction: Identifiable, Hashable {
     var categoryId: Int?
     var payeeId: Int?
     var memo: String?
+    var purchaseItems: String?
     var amountCents: Int
     var date: String
     var cleared: Bool
     var isInterest: Bool
     var transferAccountId: Int?
+}
+
+/// One allocation of a split transaction — see docs/DESIGN.md's Split
+/// transactions backlog item.
+struct TransactionSplit: Identifiable, Hashable {
+    var id: Int
+    var transactionId: Int
+    var categoryId: Int?
+    var amountCents: Int
+    var memo: String?
+}
+
+struct HouseHuntListing: Identifiable, Hashable {
+    var id: Int
+    var community: String
+    var askingPriceCents: Int
+    var beds: Int?
+    var baths: Double?
+    var areaSqft: Int?
+    var downPaymentPercent: Double
+    var ratePercent: Double
+    var termMonths: Int
+    var notes: String?
+    var rating: Int?
 }
 
 struct BudgetEntry: Identifiable, Hashable {

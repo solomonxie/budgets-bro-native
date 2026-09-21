@@ -71,10 +71,10 @@ Domain rules already designed in the original's `docs/DESIGN.md` — port logic,
 - [ ] T8.3 Privacy nutrition label, TestFlight build, submission
 
 ## Known UI/UX gaps against the spec (tracked, not hidden)
-- Tab bar: now has an opaque `Theme.surface` background (was fully transparent), but iOS 27's `TabView` still renders a floating pill, not the flush edge-to-edge bar `components.md` calls for — would need a custom `UITabBar`-backed shell to match exactly
-- Pickers throughout (category/account/payee-adjacent) are plain SwiftUI `Picker`s, not the fuzzy-search half-height-sheet convention from `components.md`
-- Backup destinations are three separate Settings sections, not the original's unified one-list-per-destination-`⋯` pattern (Phase 5 note above)
-- No drag-reorder for category groups/categories (Move Up/Down or drag) — reordering isn't implemented at all yet, groups/categories list in creation order
+- [x] ~~Tab bar renders as a floating translucent pill~~ — fixed: `RootTabView` now hand-rolls the bottom bar (`BottomTabBar`) instead of using SwiftUI's `TabView` chrome at all, giving the flush, opaque, edge-to-edge bar `components.md` calls for
+- [x] ~~Pickers are plain `Picker`s, not the fuzzy-search sheet convention~~ — fixed for Add Transaction's account/category/payee fields via `SearchablePickerSheet` (substring match, not true fuzzy matching — reasonable simplification, noted in that file). Other pickers in the app (account type, S3 currency codes, etc.) are short enough lists that a plain `Picker` is the right call, not a gap
+- [x] ~~Backup destinations are three separate Settings sections~~ — fixed: unified into one "Backup" section, each destination a row with a subtitle and a `⋯` menu (Backup Now / Restore Latest / Delete Connection), matching `design/uiux/settings.md`
+- [x] ~~No drag-reorder for category groups/categories~~ — fixed via Move Up/Down in each group's/category's `⋯`/context menu (same choice the original made over drag gestures — see its Phase 5 note on `react-native-gesture-handler`)
 - S3 Settings form has no paste-to-fill, no per-connection multiple buckets (one connection only), no folder browser
 - AI Analysis has no "About You" profile or Health/Comparison modes — just spending-by-category + optional detailed transactions
 - Transaction entry: no "Advanced" collapsible section, no payee-based transfer detection, split transactions not supported
@@ -82,7 +82,20 @@ Domain rules already designed in the original's `docs/DESIGN.md` — port logic,
 ## Backlog
 Not sequenced — pick up opportunistically, and only after the corresponding
 feature exists in scope above:
-- Baby Steps tracker, Tax Insights, Purchase Insights
-- Cost of Living / Exchange Rates / House Hunt pages (see `design/market-data/DESIGN.md`)
-- Receipt capture (see `design/receipt-capture/DESIGN.md`)
-- Existing-`budgets-bro`-data import (same SQLite schema — likely a direct file copy, needs verification)
+- [x] Baby Steps tracker (`BabyStepsView`) — steps 1/2/3/6 computed from ledger (Savings-kind total, non-mortgage/mortgage debt, 6-month average spend), 4/5/7 manual checkboxes via `app_settings`. Simplified vs. the original: no linked-account picker for "which account is my emergency fund," just every Savings-kind account's total
+- [x] Tax Insights (`TaxInsightsView`) — this-year income/spending from the ledger + two manual inputs → estimated taxable income, explicitly labeled non-authoritative
+- [x] Purchase Insights (`PurchaseInsightsView`, `Sources/Domain/PurchaseItems.swift`) — ranks purchase items by frequency with expand-to-see-price-history. `AddTransactionView` gained a plain "Purchase items (name=price, name=price)" text field rather than an item-by-item entry UI or receipt-fill — see Receipt Capture below
+- [x] Cost of Living (`CostOfLivingView`) — a smaller compiled table (10 cities vs. the original's 17), converted via live ECB rates, against the user's own 6-month total average (no per-category bucket mapping, so it's one number vs. one number, not a scatter plot)
+- [x] Exchange Rates (`ExchangeRatesView`, `ExchangeRatesClient.swift`) — real ECB rates via frankfurter.app (no key), cached in `app_settings` once a day, a 90-day trend line (Swift `Charts`)
+- [x] House Hunt (`HouseHuntView`, `house_hunt_listings` table) — a shortlist with price/sqft, down payment, and monthly-payment-via-`Amortization` derived at read time. Streamlined vs. the original's much wider field set (no roof/furnace/window/commute/catchment fields) and no side-by-side compare
+- [x] Category targets (`categories.target_cents`, monthly-only — no by-date/refill-to types) — a "needed" figure per category, "underfunded by $X" on the Budget header, "Fill Target from Unassigned" in a category's menu
+- [x] Split transactions (`transaction_splits` table, `TransactionsRepository.setSplits`) — a "Split" toggle in Add Transaction (new transactions only, not editing), activity/rollover queries updated to union splits with plain transactions so budget math stays correct. Covered by `SplitsAndTargetsTests`
+- [x] Credit-card payment envelope (`AccountDetailView`'s credit-card card) — simplified to "Statement Balance (owed) = abs(balance)" with an explanatory note, not a separate reserved-category tracker
+- [x] Generic bank CSV import with column mapping (`GenericCSVImporter.swift`, `GenericCSVImportView`) — reuses `CSV.swift` and the same `import_id` dedupe shape as YNAB import
+- [x] Cashflow runway (`CashflowRunwayView`, `Domain/Cashflow.swift`) — 30/90-day projected balance from on-budget accounts + every recurring schedule forward
+- [x] FIRE / coast-FIRE projection (`FIREProjectionView`, `Domain/Cashflow.swift`'s `FIREProjection`) — months-to-independence from current net worth + monthly savings + expected return vs. a safe-withdrawal-rate target
+- [ ] Multi-currency with hand-entered rates — **deferred**, not attempted this pass. Reversing the original MVP's own stated non-goal ("single currency assumed") is lower-value than it looks and the original's own backlog entry hedges the same way ("may feel too lean... explicitly deferred")
+- [ ] Existing-`budgets-bro`-data import (same SQLite schema — likely a direct file copy, needs verification) — not attempted, no access to a real exported `.db` file to verify against
+- [ ] Receipt Capture (see `design/receipt-capture/DESIGN.md`) — **not attempted**: needs a Share Extension target (a second Xcode target, App Group entitlement, on-device Vision OCR) that can't be meaningfully verified in this environment (no camera/photo input path in the simulator worth trusting, and share-extension-to-host-app handoff needs a real device to test at all)
+- [ ] Home/Lock Screen widget + "Add expense" App Intent — **not attempted**: needs a Widget Extension target (WidgetKit + App Intents), same "second target, can't verify here" reasoning as Receipt Capture
+- [ ] App Store submission (T8.2 finished asset, T8.3 privacy label / TestFlight / submission) — **blocked on the user's own Apple Developer Program account**: app icon artwork, App Store Connect metadata, and any TestFlight/submission step require account access this session doesn't have. Draft privacy-label copy can be written on request, but can't be submitted from here

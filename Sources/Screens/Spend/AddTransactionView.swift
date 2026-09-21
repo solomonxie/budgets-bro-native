@@ -2,8 +2,10 @@ import SwiftUI
 
 /// Per docs/design/uiux/spend.md — amount pinned up top with a custom
 /// number pad below it (not the system keyboard), outflow/inflow toggle,
-/// payee/category/account pickers, memo, date. Also edits an existing
-/// transaction (pass `editingTransaction`), with a Delete action.
+/// searchable payee/category/account pickers, memo, date. Also edits an
+/// existing transaction (pass `editingTransaction`), with a Delete action.
+/// Repeat and Split are new-transaction-only, matching the original's own
+/// scope cuts (a schedule/split is created once, not retroactively applied).
 struct AddTransactionView: View {
     var preselectedAccountId: Int?
     var editingTransaction: TransactionListItem?
@@ -25,24 +27,31 @@ struct AddTransactionView: View {
     @State private var selectedCategoryId: Int?
     @State private var payeeName = ""
     @State private var memo = ""
+    @State private var purchaseItemsText = ""
     @State private var date = Date()
     @State private var isCleared = false
     @State private var isInterest = false
     @State private var isRepeating = false
     @State private var frequency: Frequency = .monthly
     @State private var intervalN = 1
+    @State private var isSplit = false
+    @State private var splitRows: [SplitRow] = []
+
+    @State private var isAccountPickerPresented = false
+    @State private var isCategoryPickerPresented = false
+    @State private var isPayeePickerPresented = false
 
     private var amountCents: Int { Int(amountDigits) ?? 0 }
 
     private var amountDisplay: String {
-        let dollars = amountCents / 100
-        let cents = amountCents % 100
-        return String(format: "$%d.%02d", dollars, cents)
+        String(format: "$%d.%02d", amountCents / 100, amountCents % 100)
     }
 
-    private var payeeSuggestions: [Payee] {
-        guard !payeeName.isEmpty else { return [] }
-        return payees.filter { $0.name.localizedCaseInsensitiveContains(payeeName) }.prefix(5).map { $0 }
+    private var accountName: String { accounts.first { $0.id == selectedAccountId }?.name ?? "Choose" }
+    private var categoryName: String { selectedCategoryId.flatMap { id in categories.first { $0.id == id }?.displayName } ?? "None" }
+
+    private var splitRemainingCents: Int {
+        amountCents - splitRows.reduce(0) { $0 + (Int(Double($1.amountText) ?? 0) * 100) }
     }
 
     var body: some View {
@@ -59,7 +68,7 @@ struct AddTransactionView: View {
                             .padding()
                             .background(Theme.accent, in: RoundedRectangle(cornerRadius: 10))
                             .foregroundStyle(.black)
-                            .disabled(selectedAccountId == nil || amountCents == 0)
+                            .disabled(!canSave)
                         if editingTransaction != nil {
                             Button("Delete", role: .destructive) { delete() }
                         }
@@ -74,7 +83,33 @@ struct AddTransactionView: View {
                 }
             }
             .task { load() }
+            .sheet(isPresented: $isAccountPickerPresented) {
+                SearchablePickerSheet(title: "Account", items: accounts.map { SearchablePickerItem(id: $0.id, title: $0.name) }) { item in
+                    selectedAccountId = item.id
+                }
+            }
+            .sheet(isPresented: $isCategoryPickerPresented) {
+                SearchablePickerSheet(
+                    title: "Category",
+                    items: [SearchablePickerItem(id: -1, title: "None")] + categories.map { SearchablePickerItem(id: $0.id, title: $0.displayName) }
+                ) { item in
+                    selectedCategoryId = item.id == -1 ? nil : item.id
+                }
+            }
+            .sheet(isPresented: $isPayeePickerPresented) {
+                SearchablePickerSheet(
+                    title: "Payee",
+                    items: payees.map { SearchablePickerItem(id: $0.id, title: $0.name) },
+                    onSelect: { payeeName = $0.title },
+                    onCustom: { payeeName = $0 }
+                )
+            }
         }
+    }
+
+    private var canSave: Bool {
+        guard selectedAccountId != nil, amountCents > 0 else { return false }
+        return !isSplit || splitRemainingCents == 0
     }
 
     private var amountHeader: some View {
@@ -92,34 +127,13 @@ struct AddTransactionView: View {
 
     private var formFields: some View {
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                TextField("Payee", text: $payeeName)
-                    .textFieldStyle(.roundedBorder)
-                    .autocorrectionDisabled()
-                if !payeeSuggestions.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack {
-                            ForEach(payeeSuggestions) { payee in
-                                Button(payee.name) { payeeName = payee.name }
-                                    .buttonStyle(.bordered)
-                            }
-                        }
-                    }
-                }
+            PickerFieldButton(label: "Payee", value: payeeName.isEmpty ? "Choose" : payeeName) { isPayeePickerPresented = true }
+
+            if !isSplit {
+                PickerFieldButton(label: "Category", value: categoryName) { isCategoryPickerPresented = true }
             }
 
-            Picker("Category", selection: $selectedCategoryId) {
-                Text("None").tag(Int?.none)
-                ForEach(categories) { category in
-                    Text(category.displayName).tag(Optional(category.id))
-                }
-            }
-
-            Picker("Account", selection: $selectedAccountId) {
-                ForEach(accounts) { account in
-                    Text(account.name).tag(Optional(account.id))
-                }
-            }
+            PickerFieldButton(label: "Account", value: accountName) { isAccountPickerPresented = true }
 
             DatePicker(isRepeating ? "Starts" : "Date", selection: $date, displayedComponents: .date)
 
@@ -131,7 +145,21 @@ struct AddTransactionView: View {
             TextField("Memo", text: $memo)
                 .textFieldStyle(.roundedBorder)
 
+            TextField("Purchase items (name=price, name=price)", text: $purchaseItemsText)
+                .textFieldStyle(.roundedBorder)
+                .autocorrectionDisabled()
+
             if editingTransaction == nil {
+                Toggle("Split", isOn: $isSplit)
+                    .onChange(of: isSplit) { _, newValue in
+                        if newValue, splitRows.isEmpty {
+                            splitRows = [SplitRow(amountText: String(format: "%.2f", Double(amountCents) / 100))]
+                        }
+                    }
+                if isSplit {
+                    splitEditor
+                }
+
                 Toggle("Repeat", isOn: $isRepeating)
                 if isRepeating {
                     Picker("Frequency", selection: $frequency) {
@@ -146,6 +174,36 @@ struct AddTransactionView: View {
         .foregroundStyle(.white)
     }
 
+    private var splitEditor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach($splitRows) { $row in
+                HStack {
+                    Menu(row.categoryId.flatMap { id in categories.first { $0.id == id }?.displayName } ?? "Category") {
+                        ForEach(categories) { category in
+                            Button(category.displayName) { row.categoryId = category.id }
+                        }
+                    }
+                    TextField("Amount", text: $row.amountText)
+                        .keyboardType(.decimalPad)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 90)
+                    Button {
+                        splitRows.removeAll { $0.id == row.id }
+                    } label: {
+                        Image(systemName: "minus.circle.fill").foregroundStyle(Theme.negative)
+                    }
+                }
+            }
+            Button("+ Add Split") { splitRows.append(SplitRow(amountText: "0.00")) }
+                .foregroundStyle(Theme.accent)
+            Text("Remaining: \(Money.exact(splitRemainingCents))")
+                .font(.caption)
+                .foregroundStyle(splitRemainingCents == 0 ? .secondary : Theme.negative)
+        }
+        .padding()
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 10))
+    }
+
     private func load() {
         accounts = accountsRepo.all()
         categories = categoriesRepo.categories()
@@ -158,6 +216,7 @@ struct AddTransactionView: View {
             selectedCategoryId = transaction.categoryId
             payeeName = transaction.payeeName ?? ""
             memo = transaction.memo ?? ""
+            purchaseItemsText = transaction.purchaseItems ?? ""
             date = parseDate(transaction.date)
             isCleared = transaction.cleared
         } else if selectedAccountId == nil {
@@ -169,13 +228,24 @@ struct AddTransactionView: View {
         guard let accountId = selectedAccountId, amountCents > 0 else { return }
         let payeeId = payeeName.trimmingCharacters(in: .whitespaces).isEmpty ? nil : payeesRepo.ensure(name: payeeName)
         let signedCents = isOutflow ? -amountCents : amountCents
+        let purchaseItems = purchaseItemsText.trimmingCharacters(in: .whitespaces).isEmpty ? nil : purchaseItemsText
 
         if let editing = editingTransaction {
             transactionsRepo.update(Transaction(
                 id: editing.id, accountId: accountId, categoryId: selectedCategoryId, payeeId: payeeId,
-                memo: memo.isEmpty ? nil : memo, amountCents: signedCents, date: formatDate(date),
+                memo: memo.isEmpty ? nil : memo, purchaseItems: purchaseItems, amountCents: signedCents, date: formatDate(date),
                 cleared: isCleared, isInterest: isInterest, transferAccountId: editing.transferAccountId
             ))
+        } else if isSplit {
+            let newId = transactionsRepo.create(
+                accountId: accountId, categoryId: nil, payeeId: payeeId,
+                memo: memo.isEmpty ? nil : memo, purchaseItems: purchaseItems, amountCents: signedCents, date: formatDate(date),
+                cleared: isCleared, isInterest: isInterest
+            )
+            let sign = isOutflow ? -1 : 1
+            transactionsRepo.setSplits(transactionId: newId, splits: splitRows.map {
+                (categoryId: $0.categoryId, amountCents: sign * Int((Double($0.amountText) ?? 0) * 100), memo: nil)
+            })
         } else if isRepeating {
             scheduledRepo.create(
                 accountId: accountId, categoryId: selectedCategoryId, payeeId: payeeId,
@@ -186,7 +256,7 @@ struct AddTransactionView: View {
         } else {
             transactionsRepo.create(
                 accountId: accountId, categoryId: selectedCategoryId, payeeId: payeeId,
-                memo: memo.isEmpty ? nil : memo, amountCents: signedCents, date: formatDate(date),
+                memo: memo.isEmpty ? nil : memo, purchaseItems: purchaseItems, amountCents: signedCents, date: formatDate(date),
                 cleared: isCleared, isInterest: isInterest
             )
         }
@@ -199,6 +269,12 @@ struct AddTransactionView: View {
         }
         dismiss()
     }
+}
+
+private struct SplitRow: Identifiable {
+    let id = UUID()
+    var categoryId: Int?
+    var amountText: String
 }
 
 /// Ordinary page content, not the system keypad or a pinned bar — per

@@ -188,6 +188,7 @@ enum Migrator {
         (1, Migration001CreateCoreSchema.sql),
         (2, Migration002AddBudgetEntriesUniqueIndex.sql),
         (3, Migration003LoanTrackingRecurring.sql),
+        (4, Migration004TargetsAndSplits.sql),
     ]
 
     static func run(on database: Database) {

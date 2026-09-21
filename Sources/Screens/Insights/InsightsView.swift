@@ -58,10 +58,19 @@ struct InsightsView: View {
                     }
                     .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
 
-                    NavigationLink("Mortgage Calculator") { MortgageCalculatorView() }
-                        .foregroundStyle(Theme.accent)
-                    NavigationLink("AI Analysis") { AIAnalysisView() }
-                        .foregroundStyle(Theme.accent)
+                    VStack(alignment: .leading, spacing: 12) {
+                        moreLink("Baby Steps") { BabyStepsView() }
+                        moreLink("Tax Insights") { TaxInsightsView() }
+                        moreLink("Purchase Insights") { PurchaseInsightsView() }
+                        moreLink("Mortgage Calculator") { MortgageCalculatorView() }
+                        moreLink("AI Analysis") { AIAnalysisView() }
+                        moreLink("Exchange Rates") { ExchangeRatesView() }
+                        moreLink("Cost of Living") { CostOfLivingView() }
+                        moreLink("House Hunt") { HouseHuntView() }
+                        moreLink("Cashflow Runway") { CashflowRunwayView() }
+                        moreLink("FIRE Projection") { FIREProjectionView() }
+                        moreLink("Import Bank CSV") { GenericCSVImportView() }
+                    }
                 }
                 .padding()
             }
@@ -84,6 +93,10 @@ struct InsightsView: View {
 
         let months = lastSixMonths()
         trend = months.map { ($0, transactionsRepo.totalSpentCents(month: $0)) }
+    }
+
+    private func moreLink(_ title: String, @ViewBuilder destination: () -> some View) -> some View {
+        NavigationLink(title, destination: destination).foregroundStyle(Theme.accent)
     }
 
     private func lastSixMonths() -> [String] {
