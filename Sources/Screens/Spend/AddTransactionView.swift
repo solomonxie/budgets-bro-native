@@ -5,6 +5,12 @@ import SwiftUI
 /// entry), one bordered field card (Payee/Category/Account/Date/Memo +
 /// Advanced), a "Mark to repeat" pill in the header. Also edits an existing
 /// transaction, with a Delete action.
+///
+/// Payee/Category/Account unfold **in place** under their own row (see
+/// `ExpandingFieldGroup`/`DropdownField` in the original) rather than in a
+/// sheet — the form stays visible, there's no modal transition between
+/// "what I typed" and "what I'm picking", and only one panel is open at a
+/// time.
 struct AddTransactionView: View {
     var preselectedAccountId: Int?
     var editingTransaction: TransactionListItem?
@@ -17,10 +23,13 @@ struct AddTransactionView: View {
     private let transactionsRepo = TransactionsRepository()
     private let scheduledRepo = ScheduledTransactionsRepository()
 
+    private enum ExpandableField { case payee, category, account }
+
     @State private var amount = AmountExpression.empty
     @State private var isOutflow = true
     @State private var accounts: [Account] = []
     @State private var categories: [Category] = []
+    @State private var groups: [CategoryGroup] = []
     @State private var payees: [Payee] = []
     @State private var selectedAccountId: Int?
     @State private var selectedCategoryId: Int?
@@ -39,9 +48,7 @@ struct AddTransactionView: View {
     @State private var isSplit = false
     @State private var splitRows: [SplitRow] = []
 
-    @State private var isAccountPickerPresented = false
-    @State private var isCategoryPickerPresented = false
-    @State private var isPayeePickerPresented = false
+    @State private var expandedField: ExpandableField?
 
     private var amountCents: Int { AmountMath.cents(amount) }
     private var amountDisplay: String {
@@ -54,6 +61,11 @@ struct AddTransactionView: View {
     private var accountName: String { selectedAccount?.name ?? "Choose" }
     private var categoryName: String { selectedCategoryId.flatMap { id in categories.first { $0.id == id }?.displayName } ?? "" }
     private var accountLocked: Bool { preselectedAccountId != nil }
+
+    private var filteredPayees: [Payee] {
+        guard !payeeName.isEmpty else { return payees }
+        return payees.filter { $0.name.localizedCaseInsensitiveContains(payeeName) }
+    }
 
     private var splitRemainingCents: Int {
         amountCents - splitRows.reduce(0) { $0 + Int((Double($1.amountText) ?? 0) * 100) }
@@ -103,27 +115,6 @@ struct AddTransactionView: View {
                 }
             }
             .task { load() }
-            .sheet(isPresented: $isAccountPickerPresented) {
-                SearchablePickerSheet(title: "Account", items: accounts.map { SearchablePickerItem(id: $0.id, title: $0.name) }) { item in
-                    selectedAccountId = item.id
-                }
-            }
-            .sheet(isPresented: $isCategoryPickerPresented) {
-                SearchablePickerSheet(
-                    title: "Category",
-                    items: [SearchablePickerItem(id: -1, title: "Uncategorized")] + categories.map { SearchablePickerItem(id: $0.id, title: $0.displayName) }
-                ) { item in
-                    selectedCategoryId = item.id == -1 ? nil : item.id
-                }
-            }
-            .sheet(isPresented: $isPayeePickerPresented) {
-                SearchablePickerSheet(
-                    title: "Payee",
-                    items: payees.map { SearchablePickerItem(id: $0.id, title: $0.name) },
-                    onSelect: { payeeName = $0.title },
-                    onCustom: { payeeName = $0 }
-                )
-            }
         }
     }
 
@@ -163,18 +154,24 @@ struct AddTransactionView: View {
 
     private var fieldCard: some View {
         VStack(spacing: 0) {
-            fieldRow(label: "Payee", value: payeeName.isEmpty ? nil : payeeName, placeholder: "Payee") { isPayeePickerPresented = true }
+            expandableRow(field: .payee, label: "Payee", value: payeeName.isEmpty ? nil : payeeName, placeholder: "Payee")
+            if expandedField == .payee { payeePanel }
             Divider().background(Theme.border)
+
             if takesCategory {
-                fieldRow(label: "Category", value: categoryName.isEmpty ? nil : categoryName, placeholder: "Category") { isCategoryPickerPresented = true }
+                expandableRow(field: .category, label: "Category", value: categoryName.isEmpty ? nil : categoryName, placeholder: "Category")
+                if expandedField == .category { categoryPanel }
                 Divider().background(Theme.border)
             }
+
             if accountLocked {
                 fieldRow(label: "Account", value: accountName, placeholder: nil, action: nil)
             } else {
-                fieldRow(label: "Account", value: accountName == "Choose" ? nil : accountName, placeholder: "Account") { isAccountPickerPresented = true }
+                expandableRow(field: .account, label: "Account", value: accountName == "Choose" ? nil : accountName, placeholder: "Account")
+                if expandedField == .account { accountPanel }
             }
             Divider().background(Theme.border)
+
             DatePicker(isRepeating ? "Starts" : "Date", selection: $date, displayedComponents: .date)
                 .padding(.horizontal).padding(.vertical, 12)
                 .tint(Theme.accent)
@@ -201,6 +198,129 @@ struct AddTransactionView: View {
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.border, lineWidth: 1))
         .padding(.horizontal)
+    }
+
+    /// A row that unfolds its own panel directly below itself — one open at
+    /// a time (`expandedField`), matching `ExpandingFieldGroup`.
+    private func expandableRow(field: ExpandableField, label: String, value: String?, placeholder: String) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                expandedField = (expandedField == field ? nil : field)
+            }
+        } label: {
+            HStack {
+                if let value {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(label).font(.caption2).foregroundStyle(Theme.textMuted)
+                        Text(value).foregroundStyle(Theme.text)
+                    }
+                } else {
+                    Text(placeholder).foregroundStyle(Theme.textMuted)
+                }
+                Spacer()
+                Image(systemName: "chevron.down")
+                    .font(.caption)
+                    .foregroundStyle(expandedField == field ? Theme.accent : Theme.textMuted)
+                    .rotationEffect(.degrees(expandedField == field ? 180 : 0))
+            }
+            .padding(.horizontal).padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var payeePanel: some View {
+        VStack(spacing: 0) {
+            TextField("Search or type a new payee", text: $payeeName)
+                .textFieldStyle(.roundedBorder)
+                .autocorrectionDisabled()
+                .padding(.horizontal).padding(.vertical, 8)
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(filteredPayees) { payee in
+                        optionRow(label: payee.name, isSelected: payee.name == payeeName) {
+                            payeeName = payee.name
+                            closeExpanded()
+                        }
+                    }
+                }
+            }
+            .frame(maxHeight: 220)
+        }
+        .background(Theme.page)
+    }
+
+    private var categoryPanel: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                optionRow(label: "Uncategorized", isSelected: selectedCategoryId == nil) {
+                    selectedCategoryId = nil
+                    closeExpanded()
+                }
+                ForEach(sortedGroups) { group in
+                    let groupCategories = categories.filter { $0.groupId == group.id }
+                    if !groupCategories.isEmpty {
+                        Text(group.name.uppercased())
+                            .font(.caption2.bold())
+                            .foregroundStyle(Theme.textMuted)
+                            .padding(.horizontal).padding(.top, 10).padding(.bottom, 2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        ForEach(groupCategories) { category in
+                            optionRow(label: category.displayName, isSelected: selectedCategoryId == category.id) {
+                                selectedCategoryId = category.id
+                                closeExpanded()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxHeight: 260)
+        .background(Theme.page)
+    }
+
+    private var accountPanel: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                ForEach(accounts) { account in
+                    optionRow(label: account.name, isSelected: selectedAccountId == account.id) {
+                        selectedAccountId = account.id
+                        if !(account.type.isSpendingType) { selectedCategoryId = nil }
+                        closeExpanded()
+                    }
+                }
+            }
+        }
+        .frame(maxHeight: 220)
+        .background(Theme.page)
+    }
+
+    private func optionRow(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        VStack(spacing: 0) {
+            Button(action: action) {
+                HStack {
+                    Text(label)
+                        .foregroundStyle(isSelected ? Theme.accent : Theme.text)
+                        .fontWeight(isSelected ? .bold : .regular)
+                    Spacer()
+                    if isSelected {
+                        Image(systemName: "checkmark").foregroundStyle(Theme.accent)
+                    }
+                }
+                .padding(.horizontal).padding(.vertical, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Divider().background(Theme.border)
+        }
+    }
+
+    private var sortedGroups: [CategoryGroup] {
+        groups.sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    private func closeExpanded() {
+        withAnimation(.easeInOut(duration: 0.2)) { expandedField = nil }
     }
 
     private func fieldRow(label: String, value: String?, placeholder: String?, action: (() -> Void)?) -> some View {
@@ -318,6 +438,7 @@ struct AddTransactionView: View {
     private func load() {
         accounts = accountsRepo.all()
         categories = categoriesRepo.categories()
+        groups = categoriesRepo.groups()
         payees = payeesRepo.all()
 
         if let transaction = editingTransaction {
