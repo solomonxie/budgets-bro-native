@@ -19,9 +19,15 @@ struct TransactionListItem: Identifiable, Hashable {
     var isSplit: Bool
 }
 
+/// Every query here is scoped to the active board, almost always via a join
+/// on `accounts.board_id` — `transactions` itself carries no `board_id`
+/// column, since every transaction's account already belongs to exactly
+/// one board (see `BoardContext`).
 final class TransactionsRepository {
     private let database: Database
     init(database: Database = .shared) { self.database = database }
+
+    private var boardId: Int { BoardContext.shared.currentBoardId }
 
     private static let joinedSelect = """
     SELECT t.id, t.account_id, a.name, t.category_id, c.name, t.payee_id, p.name,
@@ -35,8 +41,8 @@ final class TransactionsRepository {
 
     func all(limit: Int = 500) -> [TransactionListItem] {
         database.query(
-            "\(Self.joinedSelect) ORDER BY t.date DESC, t.id DESC LIMIT ?",
-            [limit],
+            "\(Self.joinedSelect) WHERE a.board_id = ? ORDER BY t.date DESC, t.id DESC LIMIT ?",
+            [boardId, limit],
             row: Self.map
         )
     }
@@ -51,8 +57,8 @@ final class TransactionsRepository {
 
     func forMonth(_ month: String) -> [TransactionListItem] {
         database.query(
-            "\(Self.joinedSelect) WHERE substr(t.date, 1, 7) = ? ORDER BY t.date DESC, t.id DESC",
-            [month],
+            "\(Self.joinedSelect) WHERE a.board_id = ? AND substr(t.date, 1, 7) = ? ORDER BY t.date DESC, t.id DESC",
+            [boardId, month],
             row: Self.map
         )
     }
@@ -135,17 +141,19 @@ final class TransactionsRepository {
         Dictionary(uniqueKeysWithValues: database.query(
             """
             SELECT category_id, SUM(amount_cents) FROM (
-                SELECT category_id, amount_cents, date FROM transactions
-                WHERE category_id IS NOT NULL AND transfer_account_id IS NULL
+                SELECT t.category_id, t.amount_cents, t.date FROM transactions t
+                JOIN accounts a ON a.id = t.account_id
+                WHERE a.board_id = ? AND t.category_id IS NOT NULL AND t.transfer_account_id IS NULL
                 UNION ALL
                 SELECT ts.category_id, ts.amount_cents, t.date FROM transaction_splits ts
                 JOIN transactions t ON t.id = ts.transaction_id
-                WHERE ts.category_id IS NOT NULL AND t.transfer_account_id IS NULL
+                JOIN accounts a ON a.id = t.account_id
+                WHERE a.board_id = ? AND ts.category_id IS NOT NULL AND t.transfer_account_id IS NULL
             )
             WHERE substr(date, 1, 7) = ?
             GROUP BY category_id
             """,
-            [month],
+            [boardId, boardId, month],
             row: { ($0.int(0), $0.int(1)) }
         ))
     }
@@ -156,17 +164,19 @@ final class TransactionsRepository {
         Dictionary(uniqueKeysWithValues: database.query(
             """
             SELECT category_id, SUM(amount_cents) FROM (
-                SELECT category_id, amount_cents, date FROM transactions
-                WHERE category_id IS NOT NULL AND transfer_account_id IS NULL
+                SELECT t.category_id, t.amount_cents, t.date FROM transactions t
+                JOIN accounts a ON a.id = t.account_id
+                WHERE a.board_id = ? AND t.category_id IS NOT NULL AND t.transfer_account_id IS NULL
                 UNION ALL
                 SELECT ts.category_id, ts.amount_cents, t.date FROM transaction_splits ts
                 JOIN transactions t ON t.id = ts.transaction_id
-                WHERE ts.category_id IS NOT NULL AND t.transfer_account_id IS NULL
+                JOIN accounts a ON a.id = t.account_id
+                WHERE a.board_id = ? AND ts.category_id IS NOT NULL AND t.transfer_account_id IS NULL
             )
             WHERE substr(date, 1, 7) <= ?
             GROUP BY category_id
             """,
-            [month],
+            [boardId, boardId, month],
             row: { ($0.int(0), $0.int(1)) }
         ))
     }
@@ -175,8 +185,12 @@ final class TransactionsRepository {
     /// per-month figure the Insights trend chart plots.
     func totalSpentCents(month: String) -> Int {
         -min(database.query(
-            "SELECT COALESCE(SUM(amount_cents), 0) FROM transactions WHERE transfer_account_id IS NULL AND substr(date, 1, 7) = ?",
-            [month],
+            """
+            SELECT COALESCE(SUM(t.amount_cents), 0) FROM transactions t
+            JOIN accounts a ON a.id = t.account_id
+            WHERE a.board_id = ? AND t.transfer_account_id IS NULL AND substr(t.date, 1, 7) = ?
+            """,
+            [boardId, month],
             row: { $0.int(0) }
         ).first ?? 0, 0)
     }
@@ -214,9 +228,10 @@ final class TransactionsRepository {
             """
             SELECT COALESCE(SUM(t.amount_cents), 0) FROM transactions t
             JOIN accounts a ON a.id = t.account_id
-            WHERE t.category_id IS NULL AND t.transfer_account_id IS NULL AND a.on_budget = 1
+            WHERE a.board_id = ? AND t.category_id IS NULL AND t.transfer_account_id IS NULL AND a.on_budget = 1
               AND NOT EXISTS (SELECT 1 FROM transaction_splits ts WHERE ts.transaction_id = t.id)
             """,
+            [boardId],
             row: { $0.int(0) }
         ).first ?? 0
     }
@@ -231,9 +246,9 @@ final class TransactionsRepository {
                    COALESCE(SUM(CASE WHEN t.amount_cents < 0 THEN -t.amount_cents ELSE 0 END), 0)
             FROM transactions t
             JOIN accounts a ON a.id = t.account_id
-            WHERE t.transfer_account_id IS NULL AND a.on_budget = 1 AND substr(t.date, 1, 4) = ?
+            WHERE a.board_id = ? AND t.transfer_account_id IS NULL AND a.on_budget = 1 AND substr(t.date, 1, 4) = ?
             """,
-            [year],
+            [boardId, year],
             row: { ($0.int(0), $0.int(1)) }
         )
         return rows.first ?? (0, 0)
@@ -243,7 +258,12 @@ final class TransactionsRepository {
     /// Insights — see `Sources/Domain/PurchaseItems.swift`.
     func allPurchaseItemEntries() -> [(date: String, purchaseItems: String, transactionId: Int)] {
         database.query(
-            "SELECT date, purchase_items, id FROM transactions WHERE purchase_items IS NOT NULL AND purchase_items != ''",
+            """
+            SELECT t.date, t.purchase_items, t.id FROM transactions t
+            JOIN accounts a ON a.id = t.account_id
+            WHERE a.board_id = ? AND t.purchase_items IS NOT NULL AND t.purchase_items != ''
+            """,
+            [boardId],
             row: { ($0.text(0) ?? "", $0.text(1) ?? "", $0.int(2)) }
         )
     }

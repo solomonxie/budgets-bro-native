@@ -22,13 +22,17 @@ final class ScheduledTransactionsRepository {
     private let database: Database
     init(database: Database = .shared) { self.database = database }
 
+    private var boardId: Int { BoardContext.shared.currentBoardId }
+
     func all() -> [ScheduledTransaction] {
         database.query(
             """
             SELECT id, account_id, category_id, payee_id, memo, amount_cents, frequency,
                    interval_n, next_date, end_date, auto_post, is_interest
             FROM scheduled_transactions
+            WHERE board_id = ?
             """,
+            [boardId],
             row: Self.map
         )
     }
@@ -49,10 +53,10 @@ final class ScheduledTransactionsRepository {
         Int(database.run(
             """
             INSERT INTO scheduled_transactions
-                (account_id, category_id, payee_id, memo, amount_cents, frequency, interval_n, next_date, end_date, is_interest)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (account_id, category_id, payee_id, memo, amount_cents, frequency, interval_n, next_date, end_date, is_interest, board_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            [accountId, categoryId, payeeId, memo, amountCents, frequency.rawValue, intervalN, nextDate, endDate, isInterest]
+            [accountId, categoryId, payeeId, memo, amountCents, frequency.rawValue, intervalN, nextDate, endDate, isInterest, boardId]
         ))
     }
 

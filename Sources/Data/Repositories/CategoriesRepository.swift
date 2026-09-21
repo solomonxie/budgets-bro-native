@@ -1,32 +1,37 @@
 import Foundation
 
-/// CRUD for `category_groups` + `categories`. Management is inline on the
-/// Budget screen (no separate Manage Categories page) per the current UX —
-/// see docs/design/uiux/budget.md.
+/// CRUD for `category_groups` + `categories`, scoped to the active board.
+/// Management is inline on the Budget screen (no separate Manage
+/// Categories page) per the current UX — see docs/design/uiux/budget.md.
 final class CategoriesRepository {
     private let database: Database
     init(database: Database = .shared) { self.database = database }
 
+    private var boardId: Int { BoardContext.shared.currentBoardId }
+
     func groups() -> [CategoryGroup] {
         database.query(
-            "SELECT id, name, sort_order FROM category_groups ORDER BY sort_order, name",
+            "SELECT id, name, sort_order FROM category_groups WHERE board_id = ? ORDER BY sort_order, name",
+            [boardId],
             row: { CategoryGroup(id: $0.int(0), name: $0.text(1) ?? "", sortOrder: $0.int(2)) }
         )
     }
 
     func categories(includeArchived: Bool = false) -> [Category] {
         let sql = """
-        SELECT id, group_id, name, icon, sort_order, archived_at, target_cents, target_type FROM categories
-        \(includeArchived ? "" : "WHERE archived_at IS NULL")
-        ORDER BY sort_order, name
+        SELECT c.id, c.group_id, c.name, c.icon, c.sort_order, c.archived_at, c.target_cents, c.target_type
+        FROM categories c
+        JOIN category_groups g ON g.id = c.group_id
+        WHERE g.board_id = ? \(includeArchived ? "" : "AND c.archived_at IS NULL")
+        ORDER BY c.sort_order, c.name
         """
-        return database.query(sql, row: Self.mapCategory)
+        return database.query(sql, [boardId], row: Self.mapCategory)
     }
 
     @discardableResult
     func createGroup(name: String) -> Int {
-        let nextOrder = (database.query("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM category_groups", row: { $0.int(0) }).first ?? 0)
-        return Int(database.run("INSERT INTO category_groups (name, sort_order) VALUES (?, ?)", [name, nextOrder]))
+        let nextOrder = (database.query("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM category_groups WHERE board_id = ?", [boardId], row: { $0.int(0) }).first ?? 0)
+        return Int(database.run("INSERT INTO category_groups (name, sort_order, board_id) VALUES (?, ?, ?)", [name, nextOrder, boardId]))
     }
 
     func renameGroup(id: Int, name: String) {
