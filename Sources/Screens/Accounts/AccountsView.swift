@@ -206,7 +206,7 @@ struct AccountsView: View {
             Calendar.current.date(byAdding: .month, value: -offset, to: Date()).map { monthString(from: $0) }
         }
         trend = months.map { month in
-            let total = includedAccounts.reduce(0) { $0 + repository.balanceCentsAsOf(accountId: $1.id, throughDate: "\(month)-31") }
+            let total = includedAccounts.reduce(0) { $0 + repository.resolvedBalanceCentsAsOf(account: $1, throughDate: "\(month)-31") }
             return NetWorthPoint(month: month, netWorthCents: total)
         }
     }

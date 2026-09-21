@@ -47,6 +47,18 @@ final class LoanRepository {
         valueHistory(accountId: accountId, kind: kind).first?.valueCents
     }
 
+    /// The reading that was current as of a given date — the latest one
+    /// logged at or before it. Powers the Net Worth trend chart and a
+    /// mortgage's equity chart with a real curve instead of today's figure
+    /// held flat across every month.
+    func valueCents(accountId: Int, kind: String, asOf date: String) -> Int? {
+        database.query(
+            "SELECT value_cents FROM account_value_history WHERE account_id = ? AND kind = ? AND effective_date <= ? ORDER BY effective_date DESC LIMIT 1",
+            [accountId, kind, date],
+            row: { $0.int(0) }
+        ).first
+    }
+
     /// Remaining principal: the latest logged reading if one exists, else
     /// the account's opening balance. Simplified vs. the original's
     /// payment-split-since-anchor estimate between readings (see

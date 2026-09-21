@@ -322,10 +322,15 @@ struct AccountDetailView: View {
             let months = (0 ..< 12).reversed().compactMap { offset -> String? in
                 Calendar.current.date(byAdding: .month, value: -offset, to: Date()).map { monthString(from: $0) }
             }
-            // Simplified: today's owed/home-value figures held flat across
-            // the trailing window rather than reconstructed per month —
-            // matches LoanRepository's own "latest reading" simplification.
-            valueTrend = months.map { (month: $0, owedCents: remainingPrincipalCents, equityCents: homeValueCents - remainingPrincipalCents) }
+            // A real curve: each month's owed/value is whatever reading was
+            // actually current as of that month's end, not today's figure
+            // held flat — see LoanRepository.valueCents(asOf:).
+            valueTrend = months.map { month in
+                let asOf = "\(month)-28"
+                let owed = loanRepo.valueCents(accountId: accountId, kind: "principal", asOf: asOf) ?? abs(account.openingBalanceCents)
+                let value = loanRepo.valueCents(accountId: accountId, kind: "value", asOf: asOf) ?? 0
+                return (month: month, owedCents: owed, equityCents: value - owed)
+            }
         }
         if let account, account.type == .tracking {
             trackingValueCents = loanRepo.latestValueCents(accountId: accountId, kind: "value")

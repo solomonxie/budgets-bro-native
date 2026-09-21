@@ -1,10 +1,11 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Per docs/design/uiux/settings.md — sections in order: App Lock, Payees,
-/// AI Keys, Local Backup, iCloud Backup, S3, Data.
+/// Per docs/design/uiux/settings.md — sections in order: Board, App Lock,
+/// AI Keys, Local Backup, iCloud Backup, S3, Data. Payee management removed
+/// by request — payees are still matched/created by name from Add
+/// Transaction, just no longer independently editable here.
 struct SettingsView: View {
-    private let payeesRepo = PayeesRepository()
     private let appSettings = AppSettingsRepository()
     private let boardsRepo = BoardsRepository()
     private var boardContext: BoardContext { BoardContext.shared }
@@ -16,9 +17,6 @@ struct SettingsView: View {
     @State private var renameBoardText = ""
     @State private var deletingBoard: Board?
 
-    @State private var payees: [Payee] = []
-    @State private var renamingPayee: Payee?
-    @State private var renameText = ""
     @State private var apiKey = ""
     private let appLock = AppLockController.shared
     @State private var isSettingPasscode = false
@@ -48,13 +46,11 @@ struct SettingsView: View {
             Form {
                 boardSection
                 appLockSection
-                payeesSection
                 aiKeysSection
                 backupSection
                 dataSection
             }
             .navigationTitle("Settings")
-            .sheet(item: $renamingPayee) { payee in renameSheet(payee: payee) }
             .sheet(isPresented: $isSettingPasscode) { passcodeSheet }
             .sheet(isPresented: $isAddingBoard) { addBoardSheet }
             .sheet(item: $renamingBoard) { board in renameBoardSheet(board: board) }
@@ -224,47 +220,6 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: Payees
-
-    private var payeesSection: some View {
-        Section {
-            Text("Payees are matched by name across every transaction. Renaming one here relabels its history.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            ForEach(payees) { payee in
-                Button {
-                    renameText = payee.name
-                    renamingPayee = payee
-                } label: {
-                    Text(payee.name).foregroundStyle(.primary)
-                }
-            }
-        } header: {
-            Text("Payees")
-        }
-    }
-
-    private func renameSheet(payee: Payee) -> some View {
-        NavigationStack {
-            Form {
-                TextField("Name", text: $renameText)
-            }
-            .navigationTitle("Rename Payee")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { renamingPayee = nil }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        payeesRepo.rename(id: payee.id, to: renameText)
-                        renamingPayee = nil
-                        reload()
-                    }
-                }
-            }
-        }
-    }
-
     // MARK: AI Keys
 
     private var aiKeysSection: some View {
@@ -397,7 +352,6 @@ struct SettingsView: View {
 
     private func reload() {
         boards = boardsRepo.all()
-        payees = payeesRepo.all()
         apiKey = Keychain.get(SecretKey.aiAPIKey) ?? ""
         localBackups = LocalBackupRepository.list()
         iCloudBackups = ICloudBackupRepository.list()

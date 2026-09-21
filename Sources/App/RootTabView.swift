@@ -75,7 +75,7 @@ private struct BottomTabBar: View {
                 tabButton(.insights, label: "Insights")
             }
             .padding(.top, 10)
-            .padding(.bottom, 28)
+            .padding(.bottom, 6)
         }
         .background(Theme.surface)
     }

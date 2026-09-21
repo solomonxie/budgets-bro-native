@@ -38,7 +38,7 @@ struct BudgetView: View {
             Theme.page.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    monthNav
+                    MonthNav(month: $month, onChange: reload)
                     summaryCard
                     if isBreakdownOpen { breakdownCard }
                     ForEach(groups) { group in
@@ -74,19 +74,6 @@ struct BudgetView: View {
         .sheet(item: $settingTargetCategory) { category in targetSheet(category: category) }
         .task { reload() }
         .onReceive(NotificationCenter.default.publisher(for: .boardDidChange)) { _ in reload() }
-    }
-
-    private var monthNav: some View {
-        HStack {
-            Button { shiftMonth(by: -1) } label: { Image(systemName: "chevron.left") }
-            Spacer()
-            Text(month).font(.headline)
-            Spacer()
-            Button { shiftMonth(by: 1) } label: { Image(systemName: "chevron.right") }
-        }
-        .foregroundStyle(Theme.text)
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
     }
 
     private var summaryCard: some View {
@@ -360,16 +347,6 @@ struct BudgetView: View {
                     }
                 }
             }
-        }
-    }
-
-    private func shiftMonth(by delta: Int) {
-        var components = DateComponents()
-        components.month = delta
-        let referenceDate = parseDate(month + "-01")
-        if let newDate = Calendar.current.date(byAdding: components, to: referenceDate) {
-            month = monthString(from: newDate)
-            reload()
         }
     }
 
