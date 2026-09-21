@@ -27,6 +27,15 @@ enum AccountType: String, Codable, CaseIterable {
         }
     }
 
+    /// A category only means something where money is actually spent out of
+    /// assigned cash — a loan/mortgage/tracking account takes none.
+    var isSpendingType: Bool {
+        switch self {
+        case .checking, .savings, .creditCard, .cash: true
+        case .loan, .mortgage, .tracking: false
+        }
+    }
+
     var displayName: String {
         switch self {
         case .checking: "Checking"
@@ -48,6 +57,7 @@ struct Account: Identifiable, Hashable {
     var currency: String
     var openingBalanceCents: Int
     var archivedAt: String?
+    var termMonths: Int?
 }
 
 struct CategoryGroup: Identifiable, Hashable {

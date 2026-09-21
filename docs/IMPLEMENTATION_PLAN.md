@@ -65,10 +65,8 @@ Domain rules already designed in the original's `docs/DESIGN.md` — port logic,
 - [x] T7.1 CSV parser (`Sources/Import/CSV.swift`) — quoted fields, embedded commas/newlines
 - [x] T7.2 `YNABImporter`: reads the real `.zip` (via the new `Zip.swift` reader — see AGENTS.md's dependency table), matches/creates accounts+categories+payees by name, `import_id` keyed on account+date+payee+occurrence, upserts on conflict. Wired into Settings → Data → "Import from YNAB" (`.fileImporter`). **Not yet verified against a real YNAB export** — parsing logic follows the documented column names but hasn't been round-tripped against an actual downloaded export file
 
-## Phase 8: App lock, App Store prep
+## Phase 8: App lock
 - [x] T8.1 App Lock: Off / passcode / Face ID (`AppLockController`, `LockScreenView`) — passcode in the Keychain (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`), biometrics via `LAContext`'s `.deviceOwnerAuthentication` (falls back to device passcode, same guarantee as the original's `BIOMETRY_ANY_OR_DEVICE_PASSCODE`), 60s grace period on foreground
-- [ ] T8.2 App icon/assets (vector where possible, per the size budget) — `AppIcon.appiconset` exists but empty
-- [ ] T8.3 Privacy nutrition label, TestFlight build, submission
 
 ## Known UI/UX gaps against the spec (tracked, not hidden)
 - [x] ~~Tab bar renders as a floating translucent pill~~ — fixed: `RootTabView` now hand-rolls the bottom bar (`BottomTabBar`) instead of using SwiftUI's `TabView` chrome at all, giving the flush, opaque, edge-to-edge bar `components.md` calls for
@@ -84,7 +82,7 @@ Not sequenced — pick up opportunistically, and only after the corresponding
 feature exists in scope above:
 - [x] Baby Steps tracker (`BabyStepsView`) — steps 1/2/3/6 computed from ledger (Savings-kind total, non-mortgage/mortgage debt, 6-month average spend), 4/5/7 manual checkboxes via `app_settings`. Simplified vs. the original: no linked-account picker for "which account is my emergency fund," just every Savings-kind account's total
 - [x] Tax Insights (`TaxInsightsView`) — this-year income/spending from the ledger + two manual inputs → estimated taxable income, explicitly labeled non-authoritative
-- [x] Purchase Insights (`PurchaseInsightsView`, `Sources/Domain/PurchaseItems.swift`) — ranks purchase items by frequency with expand-to-see-price-history. `AddTransactionView` gained a plain "Purchase items (name=price, name=price)" text field rather than an item-by-item entry UI or receipt-fill — see Receipt Capture below
+- [x] Purchase Insights (`PurchaseInsightsView`, `Sources/Domain/PurchaseItems.swift`) — ranks purchase items by frequency with expand-to-see-price-history. `AddTransactionView` gained a plain "Purchase items (name=price, name=price)" text field, typed by hand
 - [x] Cost of Living (`CostOfLivingView`) — a smaller compiled table (10 cities vs. the original's 17), converted via live ECB rates, against the user's own 6-month total average (no per-category bucket mapping, so it's one number vs. one number, not a scatter plot)
 - [x] Exchange Rates (`ExchangeRatesView`, `ExchangeRatesClient.swift`) — real ECB rates via frankfurter.app (no key), cached in `app_settings` once a day, a 90-day trend line (Swift `Charts`)
 - [x] House Hunt (`HouseHuntView`, `house_hunt_listings` table) — a shortlist with price/sqft, down payment, and monthly-payment-via-`Amortization` derived at read time. Streamlined vs. the original's much wider field set (no roof/furnace/window/commute/catchment fields) and no side-by-side compare
@@ -96,6 +94,3 @@ feature exists in scope above:
 - [x] FIRE / coast-FIRE projection (`FIREProjectionView`, `Domain/Cashflow.swift`'s `FIREProjection`) — months-to-independence from current net worth + monthly savings + expected return vs. a safe-withdrawal-rate target
 - [ ] Multi-currency with hand-entered rates — **deferred**, not attempted this pass. Reversing the original MVP's own stated non-goal ("single currency assumed") is lower-value than it looks and the original's own backlog entry hedges the same way ("may feel too lean... explicitly deferred")
 - [ ] Existing-`budgets-bro`-data import (same SQLite schema — likely a direct file copy, needs verification) — not attempted, no access to a real exported `.db` file to verify against
-- [ ] Receipt Capture (see `design/receipt-capture/DESIGN.md`) — **not attempted**: needs a Share Extension target (a second Xcode target, App Group entitlement, on-device Vision OCR) that can't be meaningfully verified in this environment (no camera/photo input path in the simulator worth trusting, and share-extension-to-host-app handoff needs a real device to test at all)
-- [ ] Home/Lock Screen widget + "Add expense" App Intent — **not attempted**: needs a Widget Extension target (WidgetKit + App Intents), same "second target, can't verify here" reasoning as Receipt Capture
-- [ ] App Store submission (T8.2 finished asset, T8.3 privacy label / TestFlight / submission) — **blocked on the user's own Apple Developer Program account**: app icon artwork, App Store Connect metadata, and any TestFlight/submission step require account access this session doesn't have. Draft privacy-label copy can be written on request, but can't be submitted from here

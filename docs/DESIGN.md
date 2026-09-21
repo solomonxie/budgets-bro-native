@@ -11,7 +11,6 @@ Existing YNAB-style budgeting apps are subscription-based, cloud-backend-depende
 - Two native, on-device reports (spending breakdown, income vs. spending trend) — no AI or network call required for either.
 - Self-contained financial calculators module (mortgage, loan/interest, amortization).
 - AI analysis using the user's own API key, called directly from device to provider.
-- Receipt capture: a photo shared in from Photos becomes transactions to review — on-device OCR, no photo-library permission ([`design/receipt-capture/DESIGN.md`](design/receipt-capture/DESIGN.md)).
 - SQLite as the single on-device source of truth; iCloud and S3 as optional backup targets.
 - Zero backend servers operated by Budgets Bro — client-only app, for both cost and privacy.
 - Lightweight and blazing fast: small install, instant to open, no spinner for anything the phone can do itself. See Size and speed budget below.
@@ -27,7 +26,6 @@ Existing YNAB-style budgeting apps are subscription-based, cloud-backend-depende
 - Advanced reporting/BI beyond the two native reports described below (spending breakdown, income vs spending)
 - AI taking actions on data (analysis/insights only, read-only against the AI provider)
 - Category goals/targets (funding targets, "needed by" dates) — real YNAB feature, deferred post-MVP: meaningful added complexity (goal types, progress math) that isn't required for basic envelope budgeting
-- Receipt photo attachment on transactions — deferred post-MVP (needs local image storage/size management). Reading a receipt shared into the app is a separate thing and is designed in [`design/receipt-capture/DESIGN.md`](design/receipt-capture/DESIGN.md): the photo is parsed on-device and discarded, never stored.
 - Transaction flags (arbitrary color tags) — deferred post-MVP, cosmetic-only
 - Payee-based transfer detection/autocomplete beyond a simple picker — deferred post-MVP
 
@@ -40,7 +38,7 @@ Envelope/zero-based budgeting, YNAB-style. Transfers are linked transaction pair
 - `categories` (id, group_id, name, icon nullable, sort_order, archived_at) — `icon` is a single emoji, shown next to the name in lists (matches the visual identity pattern real YNAB uses; optional, defaults to none)
 - `budget_entries` (id, category_id, month `YYYY-MM`, assigned_cents) — one row per category per month
 - `payees` (id, name)
-- `transactions` (id, account_id, category_id nullable, payee_id nullable, memo, purchase_items nullable, amount_cents signed, date, cleared, is_interest, transfer_account_id nullable, import_id nullable unique, created_at, updated_at) — `import_id` is the dedupe key for YNAB data import (below); `is_interest` flags interest income on savings-type accounts so it can be broken out separately in reports/AI analysis instead of blending into generic income; `purchase_items` is a short `key=value, key=value` string naming what was bought (typed by hand, or filled from a shared receipt) — one column rather than a child table because it is only ever read whole, and it is what Insights' Purchase Insights page aggregates (see `src/domain/purchaseItems.ts`)
+- `transactions` (id, account_id, category_id nullable, payee_id nullable, memo, purchase_items nullable, amount_cents signed, date, cleared, is_interest, transfer_account_id nullable, import_id nullable unique, created_at, updated_at) — `import_id` is the dedupe key for YNAB data import (below); `is_interest` flags interest income on savings-type accounts so it can be broken out separately in reports/AI analysis instead of blending into generic income; `purchase_items` is a short `key=value, key=value` string naming what was bought, typed by hand — one column rather than a child table because it is only ever read whole, and it is what Insights' Purchase Insights page aggregates (see `Sources/Domain/PurchaseItems.swift`)
 
 **Derived (computed, not stored):**
 - Category balance(month) = cumulative assigned(≤ month) + cumulative activity(≤ month). Because this is a running cumulative sum rather than a per-month reset, an unspent balance automatically carries forward to next month in the same category — this rollover is the core mechanic of envelope budgeting and isn't a separate feature to build. The same mechanism lets a user assign money to a *future* month (there's nothing that restricts `budget_entries.month` to the current or past) — assigning ahead just pre-funds that month's cumulative balance.
@@ -280,4 +278,3 @@ breaks.
 - iCloud container entitlement is native-first here (no config-plugin layer to fight), but still needs a paid Apple Developer account, same as the original.
 - DIY cost for charts/pickers/gesture-driven UI is the open question this whole rewrite is testing — track per-feature actual effort against the estimate in `AGENTS.md` and reconsider a dependency if a specific screen blows past it.
 - No existing-data migration path is designed yet for someone switching from the RN app to this one on the same device — same SQLite schema should make it a file copy, but that's unverified.
-- App Store privacy label must disclose that transaction data can be sent to a user-chosen AI provider and to user-chosen iCloud/S3 backup targets — same disclosure the original ships.
