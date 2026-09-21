@@ -14,10 +14,31 @@ own `docs/DESIGN.md`.
 - [x] T0.5 SQLite wrapper over `libsqlite3` + versioned migration runner (`PRAGMA user_version`) — `Sources/Data/Database.swift`
 - [ ] T0.6 Keychain wrapper for API key / S3 credentials — `Sources/Secure/Keychain.swift`, `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` (pulled forward to Phase 4/5 where it's first needed)
 - [x] T0.7 XCTest target + one sample passing test (`DatabaseTests.testMigrationCreatesAccountsTable`)
-- [ ] T0.8 SwiftLint + SwiftFormat config; GitHub Actions CI (`xcodebuild test`) — CI workflow committed, lint tools not yet added
+- [ ] T0.8 SwiftLint + SwiftFormat config — not yet added. No CI (removed by request; `xcodebuild build`/`test` run locally instead)
 - [x] T0.9 First size measurement against the 4.25 MB / 1.8 MB budget — Debug `.app` measured at 796 KB unstripped for the whole skeleton, well inside budget
 
 **Frameworks finalized** (see `AGENTS.md`'s dependency table for the full list): SwiftUI/`NavigationStack`/`TabView` for nav, system `libsqlite3` for storage, `Security` Keychain for secrets, `CryptoKit` for SigV4 HMAC, `URLSession` for AI calls, Swift `Charts` for Insights. The one item that stayed open — the backup/YNAB-import zip container — is now decided too: Apple's `Archive`/`Compression` frameworks only speak the AAR format, not portable PKZIP, so backup/import zips need a **hand-rolled ZIP reader/writer over system `libz.tbd`** (deflate/inflate from zlib, container framing hand-written) — scoped to Phase 5/7 when backup and YNAB import land, not needed yet.
+
+## Boards (landed out of sequence — a gap found by the user, not planned above)
+budgets-bro scopes *everything* — accounts, categories, payees, schedules —
+under a `board_id`, has a board switcher in Settings, and auto-seeds a
+"Demo" board on first launch (`useBoards.ts`, `db/seed/demoBoard.ts`). The
+native port had none of this: a single global ledger, no switcher, no demo
+data. Retrofitted rather than designed in from Phase 0, since it wasn't
+caught until a user asked "where's board management and demo board?" —
+worth a self-review note: multi-tenancy-shaped features (multi-board,
+multi-user, multi-workspace) need to be checked for explicitly up front
+when porting a real app, not assumed absent just because early screens
+didn't need one.
+
+- [x] `boards` table (`Migration005Boards`) + `board_id` on `accounts`, `category_groups`, `payees`, `scheduled_transactions` — `transactions`/`categories`/`budget_entries`/`transaction_splits`/rate+value history stay unscoped directly and inherit board scope transitively through their parent FK (fewer columns to migrate, one join deep at query time, personal-ledger scale makes the join cost irrelevant). One real bug caught by the first test run: SQLite refuses `ALTER TABLE ADD COLUMN` combining a `REFERENCES` clause with a non-NULL default — dropped the inline FK, enforced in application code instead via `BoardContext`
+- [x] `BoardsRepository` (CRUD, cascade delete, unique-name-on-conflict) + `BoardContext` (`@Observable` active-board singleton, persisted, posts `.boardDidChange` on switch so every screen already listening for writes also reloads on a board switch for free)
+- [x] Every repository's queries/inserts scoped to `BoardContext.shared.currentBoardId`
+- [x] `DemoBoardSeeder.swift` — ported from `demoBoard.ts`: same account/category/payee names, 24 months of transactions, mortgage/car-loan/lease/student-loan amortization schedules, RRSP/TFSA/investment growth. Seeded once automatically on first-ever launch (`ensureDemoBoardSeededOnce`, mirroring `useEnsureDemoBoard`'s settings-flag-gated one-time seed); "Create Demo Board" in Settings reuses the same seeder for on-demand re-creation, auto-numbered ("Demo 2", ...) on repeat taps
+- [x] Settings gained a Board section: switch/rename/delete/new, matching board list UI
+- [x] **Real correctness bug fixed in the same pass, not just a boards gap**: `AccountsRepository.balanceCents` always computed opening+transactions, even for tracking/asset accounts (whose true balance is their latest logged value) and loan/mortgage accounts (whose true balance is negative remaining principal) — silently wrong Net Worth/account-balance figures whenever a value or principal reading had ever been logged. Fixed via `resolvedBalanceCents`, matching `accountKind.ts`'s `usesLoggedValue`/`isLoanLikeType` split
+- [x] `AccountType.asset` added (was missing entirely — needed for the demo's house/cabin/belongings accounts)
+- [ ] Not ported: `Giving` account kind, and `toppedUpByContributions`'s distinction between a value log that's a floor-plus-contributions (tracking/giving) vs. an absolute reading (asset) — this native port treats every logged-value account the same way (latest reading is the whole balance)
 
 ## Phase 1: Domain schema + Accounts/Categories CRUD
 - [x] T1.1 Port SQLite schema 1:1 from `budgets-bro`'s current schema (`accounts`, `category_groups`, `categories`, `payees`, `budget_entries`, `transactions`, `app_settings` — see that repo's `docs/DESIGN.md#core-domain-model`) — `Sources/Data/Migrations/Migration001CreateCoreSchema.swift`
