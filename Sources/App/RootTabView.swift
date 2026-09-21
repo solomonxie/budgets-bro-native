@@ -1,56 +1,43 @@
 import SwiftUI
 
-/// Nav shell per docs/design/uiux/README.md's diagram — flush tabs, Settings
-/// as a header button (not a tab slot), Spend intercepts its own tab press
-/// instead of switching the displayed tab.
+/// Nav shell per docs/design/uiux/README.md's diagram — flush tabs with an
+/// explicit background, Settings as a header button (not a tab slot),
+/// Spend intercepts its own tab press instead of switching the displayed
+/// tab. Hand-rolled bottom bar rather than SwiftUI's `TabView`: iOS 26+'s
+/// default tab bar renders as a floating translucent pill even with a
+/// background style applied, which the design explicitly calls out as
+/// wrong for this near-black theme — "iOS's translucent blur reads as a
+/// stray dark bar."
 struct RootTabView: View {
-    private enum Tab: Hashable {
-        case budget, spend, accounts, insights
+    enum Tab: Hashable {
+        case budget, accounts, insights
     }
 
     @State private var selectedTab: Tab = .budget
-    @State private var previousTab: Tab = .budget
     @State private var isAddTransactionPresented = false
     @State private var isSettingsPresented = false
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            NavigationStack {
-                BudgetView()
-                    .toolbar { settingsToolbarItem }
+        VStack(spacing: 0) {
+            Group {
+                switch selectedTab {
+                case .budget:
+                    NavigationStack { BudgetView().toolbar { settingsToolbarItem } }
+                case .accounts:
+                    NavigationStack { AccountsView().toolbar { settingsToolbarItem } }
+                case .insights:
+                    NavigationStack { InsightsView().toolbar { settingsToolbarItem } }
+                }
             }
-            .tabItem { Text("Budget") }
-            .tag(Tab.budget)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Color.clear
-                .tabItem { Text("✛ Spend") }
-                .tag(Tab.spend)
-
-            NavigationStack {
-                AccountsView()
-                    .toolbar { settingsToolbarItem }
+            BottomTabBar(selectedTab: $selectedTab) {
+                isAddTransactionPresented = true
             }
-            .tabItem { Text("Accounts") }
-            .tag(Tab.accounts)
-
-            NavigationStack {
-                InsightsView()
-                    .toolbar { settingsToolbarItem }
-            }
-            .tabItem { Text("Insights") }
-            .tag(Tab.insights)
         }
+        .background(Theme.page)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .tint(Theme.accent)
-        .toolbarBackground(Theme.surface, for: .tabBar)
-        .toolbarBackground(.visible, for: .tabBar)
-        .onChange(of: selectedTab) { _, newValue in
-            guard newValue == .spend else {
-                previousTab = newValue
-                return
-            }
-            selectedTab = previousTab
-            isAddTransactionPresented = true
-        }
         .fullScreenCover(isPresented: $isAddTransactionPresented) {
             AddTransactionView()
         }
@@ -66,6 +53,40 @@ struct RootTabView: View {
             } label: {
                 Image(systemName: "gearshape")
             }
+        }
+    }
+}
+
+private struct BottomTabBar: View {
+    @Binding var selectedTab: RootTabView.Tab
+    let onSpendTap: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider().background(Color.white.opacity(0.1))
+            HStack(spacing: 0) {
+                tabButton(.budget, label: "Budget")
+                Button(action: onSpendTap) {
+                    Text("✛ Spend").font(.footnote).frame(maxWidth: .infinity)
+                }
+                .foregroundStyle(.white)
+                tabButton(.accounts, label: "Accounts")
+                tabButton(.insights, label: "Insights")
+            }
+            .padding(.top, 10)
+            .padding(.bottom, 28)
+        }
+        .background(Theme.surface)
+    }
+
+    private func tabButton(_ tab: RootTabView.Tab, label: String) -> some View {
+        Button {
+            selectedTab = tab
+        } label: {
+            Text(label)
+                .font(.footnote)
+                .foregroundStyle(selectedTab == tab ? Theme.accent : .secondary)
+                .frame(maxWidth: .infinity)
         }
     }
 }

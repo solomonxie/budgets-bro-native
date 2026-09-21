@@ -24,6 +24,9 @@ struct BudgetView: View {
     @State private var addingCategoryToGroup: CategoryGroup?
     @State private var renamingCategory: Category?
     @State private var renameText = ""
+    @State private var underfundedCents = 0
+    @State private var settingTargetCategory: Category?
+    @State private var targetText = ""
 
     var body: some View {
         ZStack {
@@ -62,6 +65,9 @@ struct BudgetView: View {
         .sheet(item: $renamingCategory) { category in
             renameCategorySheet(category: category)
         }
+        .sheet(item: $settingTargetCategory) { category in
+            targetSheet(category: category)
+        }
         .task { reload() }
         .onReceive(NotificationCenter.default.publisher(for: .boardDidChange)) { _ in reload() }
     }
@@ -78,6 +84,11 @@ struct BudgetView: View {
             Text("Unassigned \(Money.wholeDollars(unassignedCents))")
                 .font(.subheadline)
                 .foregroundStyle(unassignedCents < 0 ? Theme.negative : Theme.accent)
+            if underfundedCents > 0 {
+                Text("Underfunded by \(Money.wholeDollars(underfundedCents))")
+                    .font(.caption)
+                    .foregroundStyle(Theme.partial)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
@@ -120,8 +131,11 @@ struct BudgetView: View {
                 Spacer()
                 Menu {
                     Button("Add Category") { addingCategoryToGroup = group }
+                    Button("Move Up") { categoriesRepo.moveGroup(id: group.id, direction: .up); reload() }
+                    Button("Move Down") { categoriesRepo.moveGroup(id: group.id, direction: .down); reload() }
                     Button("Delete Group", role: .destructive) {
                         categoriesRepo.deleteGroup(id: group.id)
+                        reload()
                     }
                 } label: {
                     Image(systemName: "ellipsis").foregroundStyle(.secondary)
@@ -168,6 +182,11 @@ struct BudgetView: View {
                 Text("Spent \(Money.wholeDollars(spent)) of \(Money.wholeDollars(assigned))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let target = category.targetCents, target > assigned {
+                    Text("Needed: \(Money.wholeDollars(target - assigned))")
+                        .font(.caption)
+                        .foregroundStyle(Theme.partial)
+                }
             }
             .padding()
             .contentShape(Rectangle())
@@ -177,7 +196,20 @@ struct BudgetView: View {
                 renameText = category.name
                 renamingCategory = category
             }
-            Button("Delete", role: .destructive) { categoriesRepo.archive(categoryId: category.id) }
+            Button("Set Target") {
+                targetText = category.targetCents.map { String(format: "%.2f", Double($0) / 100) } ?? ""
+                settingTargetCategory = category
+            }
+            if let target = category.targetCents, target > assigned {
+                Button("Fill Target from Unassigned") {
+                    let fillCents = min(target - assigned, max(unassignedCents, 0)) + assigned
+                    BudgetRepository().setAssigned(categoryId: category.id, month: month, cents: fillCents)
+                    reload()
+                }
+            }
+            Button("Move Up") { categoriesRepo.moveCategory(id: category.id, direction: .up); reload() }
+            Button("Move Down") { categoriesRepo.moveCategory(id: category.id, direction: .down); reload() }
+            Button("Delete", role: .destructive) { categoriesRepo.archive(categoryId: category.id); reload() }
         }
     }
 
@@ -259,6 +291,35 @@ struct BudgetView: View {
         }
     }
 
+    private func targetSheet(category: Category) -> some View {
+        NavigationStack {
+            Form {
+                TextField("Monthly target", text: $targetText)
+                    .keyboardType(.decimalPad)
+                Button("Clear Target", role: .destructive) {
+                    categoriesRepo.setTarget(categoryId: category.id, monthlyCents: nil)
+                    settingTargetCategory = nil
+                    reload()
+                }
+            }
+            .navigationTitle("Target")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { settingTargetCategory = nil }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        if let value = Double(targetText) {
+                            categoriesRepo.setTarget(categoryId: category.id, monthlyCents: Int((value * 100).rounded()))
+                        }
+                        settingTargetCategory = nil
+                        reload()
+                    }
+                }
+            }
+        }
+    }
+
     private func shiftMonth(by delta: Int) {
         var components = DateComponents()
         components.month = delta
@@ -290,6 +351,11 @@ struct BudgetView: View {
         unassignedCents = BudgetMath.unassignedCashCents(uncategorizedActivityAllTimeCents: uncategorized, assignedAllTimeCents: assignedAllTime)
 
         spentThisMonthCents = -min(activityThisMonth.values.reduce(0, +), 0)
+        underfundedCents = categories.reduce(0) { total, category in
+            guard let target = category.targetCents else { return total }
+            let assigned = assignedThisMonth[category.id] ?? 0
+            return total + max(0, target - assigned)
+        }
     }
 }
 
