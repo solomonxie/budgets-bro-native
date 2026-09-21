@@ -1,3 +1,4 @@
+import Charts
 import SwiftUI
 
 /// Register + running balance for one account, per docs/design/uiux/accounts.md.
@@ -24,6 +25,10 @@ struct AccountDetailView: View {
     @State private var trackingValueCents: Int?
     @State private var isLogValuePresented = false
     @State private var newValueText = ""
+    @State private var homeValueCents = 0
+    @State private var homeValueHistory: [(valueCents: Int, effectiveDate: String, note: String?)] = []
+    @State private var monthlyPaymentCents = 0
+    @State private var valueTrend: [(month: String, owedCents: Int, equityCents: Int)] = []
 
     var body: some View {
         ZStack {
@@ -87,44 +92,111 @@ struct AccountDetailView: View {
         .onReceive(NotificationCenter.default.publisher(for: .boardDidChange)) { _ in reload() }
     }
 
+    /// Ported from budgets-bro's `LoanDetailsCard`/`HouseValueDetails` —
+    /// Remaining Principal (red, big) beside Home Value, an Owed/Equity
+    /// stat block over a two-line chart, the value-history log, and a
+    /// "Loan Details" row linking to the payoff calculator.
     private func loanCard(account: Account) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("LOAN").font(.caption).foregroundStyle(.secondary)
-            HStack {
-                Text("Remaining Principal").foregroundStyle(.white)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("REMAINING PRINCIPAL").font(.caption2.bold()).foregroundStyle(Theme.textMuted)
+                    Text(Money.wholeDollars(-remainingPrincipalCents)).font(.title2.bold()).foregroundStyle(Theme.negative)
+                }
                 Spacer()
-                Text(Money.wholeDollars(remainingPrincipalCents)).foregroundStyle(.white)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("HOME VALUE").font(.caption2.bold()).foregroundStyle(Theme.textMuted)
+                    Text(Money.wholeDollars(homeValueCents)).font(.title3.bold()).foregroundStyle(Theme.text)
+                }
             }
+
+            if homeValueCents > 0 {
+                Divider().background(Theme.border)
+                Text("Equity: \(Money.wholeDollars(homeValueCents - remainingPrincipalCents))")
+                    .font(.caption).foregroundStyle(Theme.textMuted)
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("OWED").font(.caption2.bold()).foregroundStyle(Theme.textMuted)
+                        Text(Money.wholeDollars(remainingPrincipalCents)).font(.subheadline.bold()).foregroundStyle(Theme.negative)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("EQUITY").font(.caption2.bold()).foregroundStyle(Theme.textMuted)
+                        Text(Money.wholeDollars(homeValueCents - remainingPrincipalCents)).font(.subheadline.bold()).foregroundStyle(Theme.positive)
+                    }
+                }
+                equityChart
+            }
+
+            ForEach(homeValueHistory, id: \.effectiveDate) { entry in
+                HStack {
+                    Text(Money.wholeDollars(entry.valueCents)).font(.subheadline.bold()).foregroundStyle(Theme.text)
+                    Spacer()
+                    Text("effective \(entry.effectiveDate)").font(.caption).foregroundStyle(Theme.textMuted)
+                }
+                .padding(.horizontal).padding(.vertical, 10)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 1))
+            }
+            Button("+ Update Home Value") { isLogValuePresented = true }
+                .foregroundStyle(Theme.accent)
+                .frame(maxWidth: .infinity)
+
+            Divider().background(Theme.border)
             HStack {
-                Text("Rate").foregroundStyle(.white)
+                Text("LOAN DETAILS").font(.caption2.bold()).foregroundStyle(Theme.textMuted)
                 Spacer()
-                Text(currentRatePercent.map { String(format: "%.3f%%", $0) } ?? "—").foregroundStyle(.secondary)
+                NavigationLink {
+                    MortgageCalculatorView()
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(currentRatePercent.map { String(format: "%.3g%% · %@/mo", $0, Money.exact(monthlyPaymentCents)) } ?? "Add rate")
+                            .font(.subheadline.bold())
+                        Image(systemName: "chevron.right").font(.caption2)
+                    }
+                    .foregroundStyle(Theme.text)
+                }
             }
             Button("+ Add Rate") { isAddRatePresented = true }.foregroundStyle(Theme.accent)
-            NavigationLink("Mortgage Calculator") {
-                MortgageCalculatorView()
-            }
-            .foregroundStyle(Theme.accent)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.border, lineWidth: 1))
         .padding(.horizontal)
+    }
+
+    private var equityChart: some View {
+        Chart {
+            ForEach(Array(valueTrend.enumerated()), id: \.offset) { _, point in
+                LineMark(x: .value("Month", point.month), y: .value("Owed", Double(point.owedCents) / 100))
+                    .foregroundStyle(Theme.negative)
+                AreaMark(x: .value("Month", point.month), y: .value("Owed", Double(point.owedCents) / 100))
+                    .foregroundStyle(Theme.negative.opacity(0.25))
+                LineMark(x: .value("Month", point.month), y: .value("Equity", Double(point.equityCents) / 100))
+                    .foregroundStyle(Theme.positive)
+                AreaMark(x: .value("Month", point.month), y: .value("Equity", Double(point.equityCents) / 100))
+                    .foregroundStyle(Theme.positive.opacity(0.35))
+            }
+        }
+        .chartXAxis(.hidden)
+        .chartYAxis { AxisMarks(position: .leading) { _ in AxisValueLabel().foregroundStyle(Theme.textMuted) } }
+        .frame(height: 130)
     }
 
     private func trackingCard(account: Account) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("TRACKING VALUE").font(.caption).foregroundStyle(.secondary)
+            Text("TRACKING VALUE").font(.caption2.bold()).foregroundStyle(Theme.textMuted)
             HStack {
-                Text("Current Value").foregroundStyle(.white)
+                Text("Current Value").foregroundStyle(Theme.text)
                 Spacer()
-                Text(trackingValueCents.map { Money.wholeDollars($0) } ?? "—").foregroundStyle(.white)
+                Text(trackingValueCents.map { Money.wholeDollars($0) } ?? "—").foregroundStyle(Theme.text)
             }
             Button("+ Log Value") { isLogValuePresented = true }.foregroundStyle(Theme.accent)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.border, lineWidth: 1))
         .padding(.horizontal)
     }
 
@@ -135,19 +207,20 @@ struct AccountDetailView: View {
     /// and payment, so "what's owed" is exactly `abs(balanceCents)`.
     private func creditCardCard(account: Account) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("CREDIT CARD").font(.caption).foregroundStyle(.secondary)
+            Text("CREDIT CARD").font(.caption2.bold()).foregroundStyle(Theme.textMuted)
             HStack {
-                Text("Statement Balance (owed)").foregroundStyle(.white)
+                Text("Statement Balance (owed)").foregroundStyle(Theme.text)
                 Spacer()
-                Text(Money.wholeDollars(abs(min(balanceCents, 0)))).foregroundStyle(.white)
+                Text(Money.wholeDollars(abs(min(balanceCents, 0)))).foregroundStyle(Theme.text)
             }
             Text("Already reserved in the categories it was charged to — paying this off doesn't need new money set aside.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.caption2)
+                .foregroundStyle(Theme.textMuted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.border, lineWidth: 1))
         .padding(.horizontal)
     }
 
@@ -241,6 +314,18 @@ struct AccountDetailView: View {
         if let account, account.type == .loan || account.type == .mortgage {
             currentRatePercent = loanRepo.currentRatePercent(accountId: accountId)
             remainingPrincipalCents = loanRepo.remainingPrincipalCents(account: account)
+            homeValueHistory = loanRepo.valueHistory(accountId: accountId, kind: "value")
+            homeValueCents = homeValueHistory.first?.valueCents ?? 0
+            if let rate = currentRatePercent {
+                monthlyPaymentCents = Amortization.monthlyPaymentCents(principalCents: remainingPrincipalCents, annualRatePercent: rate, termMonths: account.termMonths ?? 360)
+            }
+            let months = (0 ..< 12).reversed().compactMap { offset -> String? in
+                Calendar.current.date(byAdding: .month, value: -offset, to: Date()).map { monthString(from: $0) }
+            }
+            // Simplified: today's owed/home-value figures held flat across
+            // the trailing window rather than reconstructed per month —
+            // matches LoanRepository's own "latest reading" simplification.
+            valueTrend = months.map { (month: $0, owedCents: remainingPrincipalCents, equityCents: homeValueCents - remainingPrincipalCents) }
         }
         if let account, account.type == .tracking {
             trackingValueCents = loanRepo.latestValueCents(accountId: accountId, kind: "value")

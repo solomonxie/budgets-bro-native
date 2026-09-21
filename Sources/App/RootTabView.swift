@@ -51,7 +51,8 @@ struct RootTabView: View {
             Button {
                 isSettingsPresented = true
             } label: {
-                Image(systemName: "gearshape")
+                Image(systemName: "slider.horizontal.3")
+                    .foregroundStyle(Theme.textMuted)
             }
         }
     }
@@ -67,9 +68,9 @@ private struct BottomTabBar: View {
             HStack(spacing: 0) {
                 tabButton(.budget, label: "Budget")
                 Button(action: onSpendTap) {
-                    Text("✛ Spend").font(.footnote).frame(maxWidth: .infinity)
+                    Text("+ Spend").font(.footnote).frame(maxWidth: .infinity)
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(Theme.text)
                 tabButton(.accounts, label: "Accounts")
                 tabButton(.insights, label: "Insights")
             }
@@ -85,7 +86,7 @@ private struct BottomTabBar: View {
         } label: {
             Text(label)
                 .font(.footnote)
-                .foregroundStyle(selectedTab == tab ? Theme.accent : .secondary)
+                .foregroundStyle(selectedTab == tab ? Theme.accent : Theme.textMuted)
                 .frame(maxWidth: .infinity)
         }
     }

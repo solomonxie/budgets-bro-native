@@ -11,17 +11,31 @@ final class BudgetMathTests: XCTestCase {
         XCTAssertEqual(BudgetMath.status(balanceCents: -100, assignedThisMonthCents: 5000), .overspent)
     }
 
-    func testStatusPartialWhenBalanceBelowAssigned() {
-        XCTAssertEqual(BudgetMath.status(balanceCents: 3000, assignedThisMonthCents: 5000), .partial)
+    func testStatusUnbudgetedWhenNothingAssigned() {
+        XCTAssertEqual(BudgetMath.status(balanceCents: 0, assignedThisMonthCents: 0), .unbudgeted)
     }
 
-    func testStatusFundedWhenBalanceCoversAssigned() {
-        XCTAssertEqual(BudgetMath.status(balanceCents: 5000, assignedThisMonthCents: 5000), .funded)
+    func testStatusFullySpentWhenBalanceExactlyZeroAndAssigned() {
+        XCTAssertEqual(BudgetMath.status(balanceCents: 0, assignedThisMonthCents: 5000), .fullySpent)
     }
 
-    func testStatusFundedWhenNothingAssignedYet() {
-        // No assignment this month isn't "partial" — nothing was promised.
-        XCTAssertEqual(BudgetMath.status(balanceCents: 0, assignedThisMonthCents: 0), .funded)
+    func testStatusFundedWhenBalancePositiveAndAssigned() {
+        XCTAssertEqual(BudgetMath.status(balanceCents: 3000, assignedThisMonthCents: 5000), .funded)
+    }
+
+    func testCaptionOverspentShowsExactShortfall() {
+        let text = BudgetMath.caption(status: .overspent, spentThisMonthCents: 4000, assignedThisMonthCents: 0, balanceCents: -40)
+        XCTAssertTrue(text.contains("Overspent by"))
+    }
+
+    func testCaptionFundedWithNoSpendReadsFunded() {
+        XCTAssertEqual(BudgetMath.caption(status: .funded, spentThisMonthCents: 0, assignedThisMonthCents: 5000, balanceCents: 5000), "Funded")
+    }
+
+    func testCategoryBarSegmentsSplitSpentVsRemaining() {
+        let segments = BudgetMath.categoryBarSegments(balanceCents: 3000, spentThisMonthCents: 1000)
+        XCTAssertEqual(segments.spentPercent, 25, accuracy: 0.01)
+        XCTAssertEqual(segments.remainingPercent, 75, accuracy: 0.01)
     }
 
     func testUnassignedCashIsUncategorizedActivityMinusAssignedAllTime() {

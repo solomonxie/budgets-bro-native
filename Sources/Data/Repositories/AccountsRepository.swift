@@ -9,7 +9,7 @@ final class AccountsRepository {
 
     func all(includeArchived: Bool = false) -> [Account] {
         let sql = """
-        SELECT id, name, type, on_budget, currency, opening_balance_cents, archived_at
+        SELECT id, name, type, on_budget, currency, opening_balance_cents, archived_at, term_months
         FROM accounts
         \(includeArchived ? "" : "WHERE archived_at IS NULL")
         ORDER BY name
@@ -50,6 +50,26 @@ final class AccountsRepository {
         ).first ?? 0
     }
 
+    /// Balance through a given date (inclusive) — the Net Worth trend
+    /// chart's per-month point. Simplified vs. the original's
+    /// `useNetWorthTrend`: reads opening + transactions only, so a
+    /// tracking/mortgage account (whose "balance" is really its latest
+    /// logged value) shows flat between loggings rather than a value-history
+    /// aware curve — noted here rather than hidden.
+    func balanceCentsAsOf(accountId: Int, throughDate: String) -> Int {
+        database.query(
+            """
+            SELECT a.opening_balance_cents + COALESCE(SUM(t.amount_cents), 0)
+            FROM accounts a
+            LEFT JOIN transactions t ON t.account_id = a.id AND t.date <= ?
+            WHERE a.id = ?
+            GROUP BY a.id
+            """,
+            [throughDate, accountId],
+            row: { $0.int(0) }
+        ).first ?? 0
+    }
+
     /// One query for every account's balance — avoids an N+1 fan-out on the
     /// Accounts list, per AGENTS.md's "never read the whole board to render
     /// part of it" (here the inverse: don't run the board query N times).
@@ -74,7 +94,8 @@ final class AccountsRepository {
             onBudget: row.int(3) != 0,
             currency: row.text(4) ?? "USD",
             openingBalanceCents: row.int(5),
-            archivedAt: row.text(6)
+            archivedAt: row.text(6),
+            termMonths: row.isNull(7) ? nil : row.int(7)
         )
     }
 }
