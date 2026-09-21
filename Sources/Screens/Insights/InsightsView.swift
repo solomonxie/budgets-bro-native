@@ -1,14 +1,16 @@
+import Charts
 import SwiftUI
 
-/// Per docs/design/uiux/insights.md — on-device only, no network. Month
-/// picker + spending breakdown for now; category trend chart, Baby Steps,
-/// Tax Insights, Purchase Insights are Backlog per IMPLEMENTATION_PLAN.md.
+/// Per docs/design/uiux/insights.md — on-device only, no network. Spending
+/// breakdown for the current month + a trailing 6-month trend. Baby Steps,
+/// Tax Insights, Purchase Insights remain Backlog per IMPLEMENTATION_PLAN.md.
 struct InsightsView: View {
     private let categoriesRepo = CategoriesRepository()
     private let transactionsRepo = TransactionsRepository()
 
     @State private var month = currentMonth()
     @State private var breakdown: [(category: Category, spentCents: Int)] = []
+    @State private var trend: [(month: String, spentCents: Int)] = []
 
     private var totalSpentCents: Int {
         breakdown.reduce(0) { $0 + $1.spentCents }
@@ -24,6 +26,20 @@ struct InsightsView: View {
                         Text(Money.wholeDollars(totalSpentCents)).font(.title.bold()).foregroundStyle(.white)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("6 MONTH TREND").font(.caption).foregroundStyle(.secondary)
+                        Chart(trend, id: \.month) { point in
+                            LineMark(x: .value("Month", point.month), y: .value("Spent", Double(point.spentCents) / 100))
+                                .foregroundStyle(Theme.accent)
+                            AreaMark(x: .value("Month", point.month), y: .value("Spent", Double(point.spentCents) / 100))
+                                .foregroundStyle(Theme.accent.opacity(0.15))
+                        }
+                        .frame(height: 140)
+                        .chartYAxis { AxisMarks(position: .leading) }
+                    }
                     .padding()
                     .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
 
@@ -44,6 +60,8 @@ struct InsightsView: View {
 
                     NavigationLink("Mortgage Calculator") { MortgageCalculatorView() }
                         .foregroundStyle(Theme.accent)
+                    NavigationLink("AI Analysis") { AIAnalysisView() }
+                        .foregroundStyle(Theme.accent)
                 }
                 .padding()
             }
@@ -63,5 +81,15 @@ struct InsightsView: View {
                 return (category, spent)
             }
             .sorted { $0.1 > $1.1 }
+
+        let months = lastSixMonths()
+        trend = months.map { ($0, transactionsRepo.totalSpentCents(month: $0)) }
+    }
+
+    private func lastSixMonths() -> [String] {
+        let calendar = Calendar.current
+        return (0 ..< 6).reversed().compactMap { offset in
+            calendar.date(byAdding: .month, value: -offset, to: Date()).map { monthString(from: $0) }
+        }
     }
 }

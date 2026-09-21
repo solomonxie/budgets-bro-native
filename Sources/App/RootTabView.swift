@@ -41,6 +41,8 @@ struct RootTabView: View {
             .tag(Tab.insights)
         }
         .tint(Theme.accent)
+        .toolbarBackground(Theme.surface, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
         .onChange(of: selectedTab) { _, newValue in
             guard newValue == .spend else {
                 previousTab = newValue

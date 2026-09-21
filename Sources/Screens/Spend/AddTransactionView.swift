@@ -2,9 +2,11 @@ import SwiftUI
 
 /// Per docs/design/uiux/spend.md — amount pinned up top with a custom
 /// number pad below it (not the system keyboard), outflow/inflow toggle,
-/// payee/category/account pickers, memo, date.
+/// payee/category/account pickers, memo, date. Also edits an existing
+/// transaction (pass `editingTransaction`), with a Delete action.
 struct AddTransactionView: View {
     var preselectedAccountId: Int?
+    var editingTransaction: TransactionListItem?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -12,6 +14,7 @@ struct AddTransactionView: View {
     private let categoriesRepo = CategoriesRepository()
     private let payeesRepo = PayeesRepository()
     private let transactionsRepo = TransactionsRepository()
+    private let scheduledRepo = ScheduledTransactionsRepository()
 
     @State private var amountDigits = "0"
     @State private var isOutflow = true
@@ -23,6 +26,11 @@ struct AddTransactionView: View {
     @State private var payeeName = ""
     @State private var memo = ""
     @State private var date = Date()
+    @State private var isCleared = false
+    @State private var isInterest = false
+    @State private var isRepeating = false
+    @State private var frequency: Frequency = .monthly
+    @State private var intervalN = 1
 
     private var amountCents: Int { Int(amountDigits) ?? 0 }
 
@@ -52,11 +60,14 @@ struct AddTransactionView: View {
                             .background(Theme.accent, in: RoundedRectangle(cornerRadius: 10))
                             .foregroundStyle(.black)
                             .disabled(selectedAccountId == nil || amountCents == 0)
+                        if editingTransaction != nil {
+                            Button("Delete", role: .destructive) { delete() }
+                        }
                     }
                     .padding()
                 }
             }
-            .navigationTitle("Add Transaction")
+            .navigationTitle(editingTransaction == nil ? "Add Transaction" : "Edit Transaction")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -110,10 +121,27 @@ struct AddTransactionView: View {
                 }
             }
 
-            DatePicker("Date", selection: $date, displayedComponents: .date)
+            DatePicker(isRepeating ? "Starts" : "Date", selection: $date, displayedComponents: .date)
+
+            Toggle("Cleared", isOn: $isCleared)
+            if !isOutflow {
+                Toggle("Interest income", isOn: $isInterest)
+            }
 
             TextField("Memo", text: $memo)
                 .textFieldStyle(.roundedBorder)
+
+            if editingTransaction == nil {
+                Toggle("Repeat", isOn: $isRepeating)
+                if isRepeating {
+                    Picker("Frequency", selection: $frequency) {
+                        ForEach(Frequency.allCases) { frequency in
+                            Text(frequency.displayName).tag(frequency)
+                        }
+                    }
+                    Stepper("Every \(intervalN) \(frequency.displayName.lowercased())\(intervalN == 1 ? "" : "s")", value: $intervalN, in: 1 ... 30)
+                }
+            }
         }
         .foregroundStyle(.white)
     }
@@ -122,20 +150,53 @@ struct AddTransactionView: View {
         accounts = accountsRepo.all()
         categories = categoriesRepo.categories()
         payees = payeesRepo.all()
-        if selectedAccountId == nil { selectedAccountId = preselectedAccountId ?? accounts.first?.id }
+
+        if let transaction = editingTransaction {
+            amountDigits = String(abs(transaction.amountCents))
+            isOutflow = transaction.amountCents < 0
+            selectedAccountId = transaction.accountId
+            selectedCategoryId = transaction.categoryId
+            payeeName = transaction.payeeName ?? ""
+            memo = transaction.memo ?? ""
+            date = parseDate(transaction.date)
+            isCleared = transaction.cleared
+        } else if selectedAccountId == nil {
+            selectedAccountId = preselectedAccountId ?? accounts.first?.id
+        }
     }
 
     private func save() {
         guard let accountId = selectedAccountId, amountCents > 0 else { return }
         let payeeId = payeeName.trimmingCharacters(in: .whitespaces).isEmpty ? nil : payeesRepo.ensure(name: payeeName)
-        transactionsRepo.create(
-            accountId: accountId,
-            categoryId: selectedCategoryId,
-            payeeId: payeeId,
-            memo: memo.isEmpty ? nil : memo,
-            amountCents: isOutflow ? -amountCents : amountCents,
-            date: formatDate(date)
-        )
+        let signedCents = isOutflow ? -amountCents : amountCents
+
+        if let editing = editingTransaction {
+            transactionsRepo.update(Transaction(
+                id: editing.id, accountId: accountId, categoryId: selectedCategoryId, payeeId: payeeId,
+                memo: memo.isEmpty ? nil : memo, amountCents: signedCents, date: formatDate(date),
+                cleared: isCleared, isInterest: isInterest, transferAccountId: editing.transferAccountId
+            ))
+        } else if isRepeating {
+            scheduledRepo.create(
+                accountId: accountId, categoryId: selectedCategoryId, payeeId: payeeId,
+                memo: memo.isEmpty ? nil : memo, amountCents: signedCents, frequency: frequency,
+                intervalN: intervalN, nextDate: formatDate(date), endDate: nil, isInterest: isInterest
+            )
+            AutoPostRunner.run()
+        } else {
+            transactionsRepo.create(
+                accountId: accountId, categoryId: selectedCategoryId, payeeId: payeeId,
+                memo: memo.isEmpty ? nil : memo, amountCents: signedCents, date: formatDate(date),
+                cleared: isCleared, isInterest: isInterest
+            )
+        }
+        dismiss()
+    }
+
+    private func delete() {
+        if let editing = editingTransaction {
+            transactionsRepo.delete(id: editing.id)
+        }
         dismiss()
     }
 }

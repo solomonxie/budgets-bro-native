@@ -7,24 +7,51 @@ import SQLite3
 final class Database {
     static let shared = Database()
 
-    private let handle: OpaquePointer
+    private var handle: OpaquePointer
 
     private init() {
-        let url = Database.storeURL()
+        handle = Database.open(at: Database.storeURL)
+        configureAndMigrate()
+    }
+
+    static var storeURL: URL {
+        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return dir.appendingPathComponent("budgetsbronative.db")
+    }
+
+    private static func open(at url: URL) -> OpaquePointer {
         var db: OpaquePointer?
         guard sqlite3_open(url.path, &db) == SQLITE_OK, let db else {
             fatalError("Failed to open SQLite database at \(url.path)")
         }
-        handle = db
+        return db
+    }
+
+    private func configureAndMigrate() {
         exec("PRAGMA journal_mode = WAL")
         exec("PRAGMA synchronous = NORMAL")
         exec("PRAGMA foreign_keys = ON")
         Migrator.run(on: self)
     }
 
-    private static func storeURL() -> URL {
-        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return dir.appendingPathComponent("budgetsbronative.db")
+    /// Flushes the WAL into the main DB file so a plain file copy (backup)
+    /// captures everything, and a restored file has no orphaned -wal/-shm
+    /// alongside it.
+    func checkpoint() {
+        exec("PRAGMA wal_checkpoint(FULL)")
+    }
+
+    /// Closes the current connection, swaps in `data` as the store's
+    /// content, and reopens — used by backup restore. Every repository
+    /// holds only a `Database` reference (never a raw statement), so the
+    /// swap is transparent to already-constructed repositories.
+    func replaceStore(with data: Data) throws {
+        checkpoint()
+        sqlite3_close(handle)
+        try data.write(to: Database.storeURL, options: .atomic)
+        handle = Database.open(at: Database.storeURL)
+        configureAndMigrate()
+        NotificationCenter.default.post(name: .boardDidChange, object: nil)
     }
 
     @discardableResult
@@ -160,6 +187,7 @@ enum Migrator {
     static let migrations: [(version: Int32, sql: String)] = [
         (1, Migration001CreateCoreSchema.sql),
         (2, Migration002AddBudgetEntriesUniqueIndex.sql),
+        (3, Migration003LoanTrackingRecurring.sql),
     ]
 
     static func run(on database: Database) {
