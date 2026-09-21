@@ -126,6 +126,40 @@ final class TransactionsRepository {
         ))
     }
 
+    /// Total spend (negative activity, non-transfer) for one month — the
+    /// per-month figure the Insights trend chart plots.
+    func totalSpentCents(month: String) -> Int {
+        -min(database.query(
+            "SELECT COALESCE(SUM(amount_cents), 0) FROM transactions WHERE transfer_account_id IS NULL AND substr(date, 1, 7) = ?",
+            [month],
+            row: { $0.int(0) }
+        ).first ?? 0, 0)
+    }
+
+    /// Upsert keyed on `import_id` — the idempotency mechanism for YNAB
+    /// import (see docs/DESIGN.md#ynab-data-import). Returns true if this
+    /// created a new row, false if it updated an existing one.
+    @discardableResult
+    func upsertImported(importId: String, accountId: Int, categoryId: Int?, payeeId: Int?, memo: String?, amountCents: Int, date: String, cleared: Bool) -> Bool {
+        if let existingId = database.query("SELECT id FROM transactions WHERE import_id = ?", [importId], row: { $0.int(0) }).first {
+            database.run(
+                """
+                UPDATE transactions
+                SET account_id = ?, category_id = ?, payee_id = ?, memo = ?, amount_cents = ?, date = ?, cleared = ?,
+                    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                WHERE id = ?
+                """,
+                [accountId, categoryId, payeeId, memo, amountCents, date, cleared, existingId]
+            )
+            return false
+        }
+        database.run(
+            "INSERT INTO transactions (account_id, category_id, payee_id, memo, amount_cents, date, cleared, import_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [accountId, categoryId, payeeId, memo, amountCents, date, cleared, importId]
+        )
+        return true
+    }
+
     /// Sum of uncategorized, non-transfer transactions on on-budget
     /// accounts, all time — the "cash" half of Unassigned Cash. See
     /// docs/DESIGN.md#core-domain-model: deliberately not scoped to a month.

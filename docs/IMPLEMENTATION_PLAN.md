@@ -33,44 +33,51 @@ own `docs/DESIGN.md`.
 
 ## Phase 3: Core budget UI
 Per-screen specs: [`design/uiux/budget.md`](design/uiux/budget.md), [`spend.md`](design/uiux/spend.md), [`transactions.md`](design/uiux/transactions.md), [`accounts.md`](design/uiux/accounts.md).
-- [x] T3.1 Budget screen: Unassigned Cash banner, collapsible category groups, status badge (funded/partial/overspent color) + caption per category, month navigation (arrows; label is display-only for now, not yet tappable-to-jump). `BudgetMath.swift` ported (categoryBalanceCents, status, unassignedCashCents) — progress bar visual still missing (color-coded number stands in for now)
-- [x] T3.2 Add/edit transaction page: autofocused amount + custom number pad (`NumberPad` — grid of buttons, not the system keypad), outflow/inflow segmented toggle, category/account `Picker`s, free-text payee field with prefix-match suggestion chips, date, memo. **Deferred to a follow-up pass**: edit-existing-transaction flow (create-only today), cleared/interest toggles, recurrence builder, and the fuzzy-search picker sheet convention from `components.md` (using plain `Picker`s for now)
-- [x] T3.3 Transactions list: grouped by date, swipe-to-delete. **Deferred**: search, multi-select bulk delete
-- [x] T3.4 Account detail/register with running balance + "+ Transaction" pre-selecting the account. **Deferred**: Correct Balance action
-- [x] T3.5 Insights: spending-by-category breakdown for the viewed month, all local. **Deferred**: category trend chart, interest-earned-this-month card
+- [x] T3.1 Budget screen: Unassigned Cash banner, collapsible category groups, status badge (funded/partial/overspent color) + a thin progress bar + caption per category, month navigation (arrows; label is display-only, not yet tappable-to-jump). `BudgetMath.swift` ported (categoryBalanceCents, status, unassignedCashCents)
+- [x] T3.2 Add/edit transaction page: autofocused amount + custom number pad, outflow/inflow toggle, category/account `Picker`s, free-text payee field with suggestion chips, date, memo, **cleared/interest toggles, a "Repeat" toggle (frequency + interval) that creates a schedule instead of a one-off, and full edit-existing-transaction support (prefills from a tapped row, Delete action)**. Still using plain `Picker`s rather than the fuzzy-search sheet convention from `components.md`
+- [x] T3.3 Transactions list: grouped by date, swipe-to-delete, **search (`.searchable`, matches payee/memo), multi-select bulk delete (`EditButton`), tap a row to edit it**
+- [x] T3.4 Account detail/register with running balance, "+ Transaction" pre-selecting the account, **and Correct Balance (enters actual balance → one uncategorized adjustment transaction for the difference, payee "Balance Adjustment")**
+- [x] T3.5 Insights: spending-by-category breakdown for the viewed month **plus a 6-month spending trend line/area chart (Swift `Charts`, system framework)**. Not yet a stacked-area top-5-categories chart with a dashed average baseline like the original — this is a simpler single-series total
 
 ## Phase 4: Financial tools + AI analysis
-- [x] T4.1 `Sources/FinanceTools/Amortization.swift`: mortgage/loan monthly payment, amortization schedule, remaining-months-to-payoff (+ extra payment), total interest remaining, simple/compound interest — ported, not yet unit-tested against the original's known-good outputs (tests come once the rest of the app catches up)
-- [x] T4.2 Mortgage/loan calculator screen (ad-hoc, reachable from Insights)
-- [~] T4.3 AI analysis: `Sources/Secure/Keychain.swift` (Keychain wrapper) done and wired into a Settings screen for key entry; the actual `URLSession` analysis call, aggregate/detailed payload modes, and in-app disclosure copy are not built yet
+- [x] T4.1 `Sources/FinanceTools/Amortization.swift`: mortgage/loan monthly payment, amortization schedule, remaining-months-to-payoff (+ extra payment), total interest remaining, simple/compound interest — ported, not yet unit-tested against the original's known-good outputs
+- [x] T4.2 Mortgage/loan calculator screen (ad-hoc, reachable from Insights and from a loan account's detail page)
+- [x] T4.3 AI analysis: `AIClient.swift` (`URLSession` to OpenAI/Anthropic directly, no SDK), `AIAnalysis.buildPrompt` (aggregate-by-default, opt-in detailed mode reading raw transactions), `AIAnalysisView` (provider picker, detailed-mode toggle with disclosure copy, one real request at run time). Keychain-stored key entered in Settings
 
-**Also landed ahead of schedule**: a real `SettingsView` (Payees rename + AI key entry; S3/Local Backup/Data sections are explicit "not built yet" stubs, not silently missing) and `Database`'s query/bind layer (`Row`, parameterized `run`/`query`, `.boardDidChange` notification posted on every write) that every repository above depends on.
-
-**Known UI/UX gaps against the spec, to close in a follow-up pass**: the tab bar renders as iOS 27's default floating translucent pill, not the flush opaque bar `components.md` calls for; pickers are plain `Picker`s, not the fuzzy-search sheet convention; no half-height-sheet vs. full-page distinction is implemented yet (everything here uses `.sheet`); category rows have no progress bar.
+**Also landed ahead of schedule**: a real `SettingsView` (App Lock, Payees rename, AI key entry, Local/iCloud/S3 backup sections, YNAB import — see Phases 5-8 below) and `Database`'s query/bind layer (`Row`, parameterized `run`/`query`, `.boardDidChange` notification, WAL checkpoint + store-replace for backup restore) that every repository depends on.
 
 **Bug found and fixed by the test pass** (caught immediately, not shipped): `Migration001` was edited in place mid-development to add `UNIQUE(category_id, month)` on `budget_entries`, after installs already existed at schema version 1 — those DBs (including this repo's own simulator smoke-test install) never re-ran migration001's SQL, so `BudgetRepository.setAssigned`'s `ON CONFLICT` upsert crashed with "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint". Fixed with a real `Migration002` (`CREATE UNIQUE INDEX IF NOT EXISTS`) instead of re-editing migration001 — the general lesson (already implicit in AGENTS.md's migration-runner rule) is that a migration's SQL is immutable once anything has run it; a schema fix is always a new migration. Also fixed in the same pass: `Amortization.buildSchedule` left a few stray cents unpaid at the end of a schedule instead of paying off exactly — the final month's payment is now adjusted to clear the remaining balance, same as a real amortization table.
 
 ## Phase 5: Backup & restore
 Per [`design/DESIGN.md#storage-backup-architecture`](DESIGN.md#storage-backup-architecture).
-- [ ] T5.1 Local on-device snapshot (Files-app-visible) — the practical always-available destination
-- [ ] T5.2 iCloud backup via ubiquity container
-- [ ] T5.3 S3 backup: `SigV4.swift` over `CryptoKit`, fail-closed credential validation (reachable / read-write / not-public / no-anonymous-access) per the original's checklist
-- [ ] T5.4 Backup destinations UI per [`design/uiux/settings.md`](design/uiux/settings.md) — one list, per-row `⋯` menu, no section-per-kind
+- [x] T5.1 Local on-device snapshot (`LocalBackupRepository`: WAL checkpoint + raw `.db` file copy under `Documents/Backups/`, list/restore/delete). **Deferred**: `UIFileSharingEnabled` in Info.plist so it's actually visible in the Files app on a real device
+- [x] T5.2 iCloud backup via ubiquity container (`ICloudBackupRepository`, same snapshot shape as local). Code path is complete but the iCloud container entitlement itself isn't provisioned yet (needs a paid Apple Developer account, T0.2) — `isAvailable` reports false until then, and the Settings section says so rather than pretending
+- [x] T5.3 S3 backup: `SigV4.swift` (SigV4 over `CryptoKit`), `S3Client.swift` (put/get/head/delete/list over `URLSession`), `S3BackupRepository.swift`. **Simplified vs. the original's four-step checklist**: reachable → read/write → not-publicly-readable, folding the original's separate "no anonymous bucket-root access" step into the same unauthenticated-GET-on-the-marker-object check (three checks doing the job of four, not a dropped guarantee)
+- [x] T5.4 Backup UI landed in `SettingsView` as three sections (Local/iCloud/S3) rather than the original's single unified list with per-row `⋯` — **UI/UX gap, tracked below**: the "one list, one hint, per-destination `⋯` menu" convention from `design/uiux/settings.md` isn't implemented; each destination has its own ad-hoc section instead
 
 ## Phase 6: Loan/mortgage, tracking accounts, recurring transactions
 Domain rules already designed in the original's `docs/DESIGN.md` — port logic, not redesign.
-- [ ] T6.1 Loan/mortgage-linked payee mechanism, rate history, remaining-principal-as-derived
-- [ ] T6.2 Tracking/investment account value-history log
-- [ ] T6.3 Recurring/scheduled transactions + lazy auto-post on foreground
+- [x] T6.1 `LoanRepository`: rate history (`account_rate_history`), remaining principal. **Simplified vs. the original's payment-split-since-anchor estimate**: remaining principal is the latest logged reading, or the account's opening balance if none has ever been logged — no interpolation between readings yet. No linked-payee-posts-to-loan-account mechanism yet (still uses a plain account, no payee auto-mirroring)
+- [x] T6.2 Tracking/investment account value-history log (`account_value_history`, shared table, `kind = 'value'`) — log/read wired into `AccountDetailView`; the two-entry-mode (exact gain vs. total) UX from the original isn't built, only "log current total"
+- [x] T6.3 Recurring/scheduled transactions (`scheduled_transactions`, `ScheduledTransactionsRepository`, `Recurrence.swift`) + `AutoPostRunner` checked on launch and every foreground. Creating one is a "Repeat" toggle in Add Transaction (frequency + interval), matching the original's consolidated T8.10 shape — no separate Upcoming/approval screen, every schedule auto-posts
 
 ## Phase 7: YNAB data import
-- [ ] T7.1 CSV parser for YNAB's Register/Plan export
-- [ ] T7.2 Import mapper with the same `import_id` (account+date+payee+occurrence) dedupe key as the original, so a shared export can be tested against both apps for parity
+- [x] T7.1 CSV parser (`Sources/Import/CSV.swift`) — quoted fields, embedded commas/newlines
+- [x] T7.2 `YNABImporter`: reads the real `.zip` (via the new `Zip.swift` reader — see AGENTS.md's dependency table), matches/creates accounts+categories+payees by name, `import_id` keyed on account+date+payee+occurrence, upserts on conflict. Wired into Settings → Data → "Import from YNAB" (`.fileImporter`). **Not yet verified against a real YNAB export** — parsing logic follows the documented column names but hasn't been round-tripped against an actual downloaded export file
 
 ## Phase 8: App lock, App Store prep
-- [ ] T8.1 App Lock: Off / passcode / Face ID, same Keychain-boundary rules as the original
-- [ ] T8.2 App icon/assets (vector where possible, per the size budget)
+- [x] T8.1 App Lock: Off / passcode / Face ID (`AppLockController`, `LockScreenView`) — passcode in the Keychain (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`), biometrics via `LAContext`'s `.deviceOwnerAuthentication` (falls back to device passcode, same guarantee as the original's `BIOMETRY_ANY_OR_DEVICE_PASSCODE`), 60s grace period on foreground
+- [ ] T8.2 App icon/assets (vector where possible, per the size budget) — `AppIcon.appiconset` exists but empty
 - [ ] T8.3 Privacy nutrition label, TestFlight build, submission
+
+## Known UI/UX gaps against the spec (tracked, not hidden)
+- Tab bar: now has an opaque `Theme.surface` background (was fully transparent), but iOS 27's `TabView` still renders a floating pill, not the flush edge-to-edge bar `components.md` calls for — would need a custom `UITabBar`-backed shell to match exactly
+- Pickers throughout (category/account/payee-adjacent) are plain SwiftUI `Picker`s, not the fuzzy-search half-height-sheet convention from `components.md`
+- Backup destinations are three separate Settings sections, not the original's unified one-list-per-destination-`⋯` pattern (Phase 5 note above)
+- No drag-reorder for category groups/categories (Move Up/Down or drag) — reordering isn't implemented at all yet, groups/categories list in creation order
+- S3 Settings form has no paste-to-fill, no per-connection multiple buckets (one connection only), no folder browser
+- AI Analysis has no "About You" profile or Health/Comparison modes — just spending-by-category + optional detailed transactions
+- Transaction entry: no "Advanced" collapsible section, no payee-based transfer detection, split transactions not supported
 
 ## Backlog
 Not sequenced — pick up opportunistically, and only after the corresponding

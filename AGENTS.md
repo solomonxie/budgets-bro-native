@@ -65,7 +65,7 @@ Rules that keep it there:
 | Zustand | SwiftUI `@Observable`/`@State`, repository calls |
 | `react-native-svg` (Insights line chart) | Swift `Charts` (system framework, iOS 16+) or `Canvas`/`Path` |
 | `@noble/hashes` (S3 SigV4 HMAC) | `CryptoKit`'s `HMAC<SHA256>` (system) |
-| `jszip` (backup zip) | hand-rolled ZIP reader/writer over system `libz` (deflate/inflate) — decided: Apple's `Archive`/`Compression` frameworks only produce the AAR format, not real PKZIP, and a YNAB export / backup file must be a real, portable `.zip`. The container format itself (local file headers + central directory) is a few hundred lines, well inside the DIY bar |
+| `jszip` (YNAB import's `.zip` reader — this app's own backups are raw SQLite file copies, not zips, so nothing here *writes* one) | hand-rolled ZIP container parsing (`Sources/Backup/Zip.swift`) over the `Compression` framework's raw-DEFLATE codec (`compression_decode_buffer` with `COMPRESSION_ZLIB`, RFC 1951 — exactly ZIP method 8, no zlib/gzip wrapper). Revised from an earlier plan to link `libz` directly: `Compression` is already a proper Swift-importable system framework, so this needs no custom C module map |
 | Direct `fetch` to AI providers | `URLSession` directly |
 | Jest | XCTest |
 | ESLint + Prettier | SwiftLint + SwiftFormat (dev-tool only) |
