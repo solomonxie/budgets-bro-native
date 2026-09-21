@@ -270,8 +270,8 @@ breaks.
 ## Testing strategy
 - Unit tests for the finance-tools port and budget-math functions (rollover, to-be-budgeted, overspend) — these need correctness guarantees, same as the original.
 - DB repository layer stays thin (CRUD SQL); business logic lives in pure functions, testable without a DB.
-- No UI test automation (XCUITest) for MVP — manual QA via TestFlight before submission, same posture as the original's "no Detox/Maestro."
-- GitHub Actions CI (macOS runner): `xcodebuild test` on push.
+- No UI test automation (XCUITest) for MVP — manual QA on a physical device, same posture as the original's "no Detox/Maestro."
+- No CI — `xcodebuild build`/`test` run locally before a commit; not automated on push.
 
 ## Risks / open questions
 - Hand-rolled SQLite migration runner needs the same versioned-migration discipline the original's `expo-sqlite` runner had — no framework provides this for free either way.

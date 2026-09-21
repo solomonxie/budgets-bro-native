@@ -15,25 +15,41 @@ enum AccountType: String, Codable, CaseIterable {
     case loan
     case mortgage
     case tracking
+    case asset
 
-    /// Grouping used by the Accounts screen — docs/design/uiux/accounts.md.
+    /// Grouping used by the Accounts screen — docs/design/uiux/accounts.md
+    /// and budgets-bro's `accountKind.ts` (`ACCOUNT_KIND_ORDER`).
     var kind: String {
         switch self {
         case .checking, .cash: "Cash"
         case .savings: "Savings"
         case .tracking: "Tracking"
         case .loan, .mortgage: "Loan"
+        case .asset: "Asset"
         case .creditCard: "Credit"
         }
     }
 
     /// A category only means something where money is actually spent out of
-    /// assigned cash — a loan/mortgage/tracking account takes none.
+    /// assigned cash — a loan/mortgage/tracking/asset account takes none.
     var isSpendingType: Bool {
         switch self {
         case .checking, .savings, .creditCard, .cash: true
-        case .loan, .mortgage, .tracking: false
+        case .loan, .mortgage, .tracking, .asset: false
         }
+    }
+
+    /// Tracking (investments) and Asset (depreciating property) both skip
+    /// the normal ledger balance in favor of a manually-logged value
+    /// history — see `LoanRepository`'s value log and `accountKind.ts`'s
+    /// `usesLoggedValue`. Simplified vs. the original: no distinction
+    /// between Tracking's deposit-vs-gain split and Asset's plain line.
+    var usesLoggedValue: Bool {
+        self == .tracking || self == .asset
+    }
+
+    var isLoanLike: Bool {
+        self == .loan || self == .mortgage
     }
 
     var displayName: String {
@@ -45,6 +61,7 @@ enum AccountType: String, Codable, CaseIterable {
         case .loan: "Loan"
         case .mortgage: "Mortgage"
         case .tracking: "Tracking"
+        case .asset: "Asset"
         }
     }
 }

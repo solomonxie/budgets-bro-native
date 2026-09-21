@@ -6,6 +6,15 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     private let payeesRepo = PayeesRepository()
     private let appSettings = AppSettingsRepository()
+    private let boardsRepo = BoardsRepository()
+    private var boardContext: BoardContext { BoardContext.shared }
+
+    @State private var boards: [Board] = []
+    @State private var isAddingBoard = false
+    @State private var newBoardName = ""
+    @State private var renamingBoard: Board?
+    @State private var renameBoardText = ""
+    @State private var deletingBoard: Board?
 
     @State private var payees: [Payee] = []
     @State private var renamingPayee: Payee?
@@ -37,6 +46,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                boardSection
                 appLockSection
                 payeesSection
                 aiKeysSection
@@ -46,6 +56,17 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .sheet(item: $renamingPayee) { payee in renameSheet(payee: payee) }
             .sheet(isPresented: $isSettingPasscode) { passcodeSheet }
+            .sheet(isPresented: $isAddingBoard) { addBoardSheet }
+            .sheet(item: $renamingBoard) { board in renameBoardSheet(board: board) }
+            .alert("Delete this board?", isPresented: Binding(get: { deletingBoard != nil }, set: { if !$0 { deletingBoard = nil } })) {
+                Button("Cancel", role: .cancel) { deletingBoard = nil }
+                Button("Delete", role: .destructive) {
+                    if let board = deletingBoard { deleteBoard(board) }
+                    deletingBoard = nil
+                }
+            } message: {
+                Text("This permanently deletes everything in this board — accounts, transactions, all of it.")
+            }
             .alert("Restore this backup?", isPresented: Binding(get: { restoreConfirmFile != nil }, set: { if !$0 { restoreConfirmFile = nil } })) {
                 Button("Cancel", role: .cancel) { restoreConfirmFile = nil }
                 Button("Restore", role: .destructive) {
@@ -60,6 +81,99 @@ struct SettingsView: View {
             }
             .task { reload() }
         }
+    }
+
+    // MARK: Board — see budgets-bro's `useBoards`/`SettingsScreen` board list.
+
+    private var boardSection: some View {
+        Section {
+            ForEach(boards) { board in
+                Button {
+                    boardContext.currentBoardId = board.id
+                    reload()
+                } label: {
+                    HStack {
+                        Image(systemName: board.id == boardContext.currentBoardId ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(board.id == boardContext.currentBoardId ? Theme.accent : Theme.textMuted)
+                        Text(board.name).foregroundStyle(.primary)
+                        Spacer()
+                        Menu {
+                            Button("Rename") {
+                                renameBoardText = board.name
+                                renamingBoard = board
+                            }
+                            if boards.count > 1 {
+                                Button("Delete", role: .destructive) { deletingBoard = board }
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis").foregroundStyle(Theme.textMuted)
+                        }
+                    }
+                }
+            }
+            Button("+ New Board") { isAddingBoard = true }.foregroundStyle(Theme.accent)
+            Button("Create Demo Board") {
+                DemoBoardSeeder.seed()
+                reload()
+            }.foregroundStyle(Theme.accent)
+        } header: {
+            Text("Board")
+        }
+    }
+
+    private var addBoardSheet: some View {
+        NavigationStack {
+            Form {
+                TextField("Board name", text: $newBoardName)
+            }
+            .navigationTitle("New Board")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { isAddingBoard = false } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        let id = boardsRepo.create(name: newBoardName)
+                        boardContext.currentBoardId = id
+                        // Seed the common starting pair so a brand-new board
+                        // isn't unusable until accounts are added by hand.
+                        let accountsRepo = AccountsRepository()
+                        accountsRepo.create(name: "Cash", type: .cash, onBudget: true, openingBalanceCents: 0)
+                        accountsRepo.create(name: "Savings", type: .savings, onBudget: true, openingBalanceCents: 0)
+                        newBoardName = ""
+                        isAddingBoard = false
+                        reload()
+                    }
+                    .disabled(newBoardName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func renameBoardSheet(board: Board) -> some View {
+        NavigationStack {
+            Form {
+                TextField("Board name", text: $renameBoardText)
+            }
+            .navigationTitle("Rename Board")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { renamingBoard = nil } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        boardsRepo.rename(id: board.id, name: renameBoardText)
+                        renamingBoard = nil
+                        reload()
+                    }
+                }
+            }
+        }
+    }
+
+    /// Falls back to whatever board is left after deleting the active one.
+    private func deleteBoard(_ board: Board) {
+        boardsRepo.delete(id: board.id)
+        if boardContext.currentBoardId == board.id {
+            boardContext.currentBoardId = boardsRepo.all().first?.id ?? board.id
+        }
+        reload()
     }
 
     // MARK: App Lock
@@ -282,6 +396,7 @@ struct SettingsView: View {
     // MARK: Actions
 
     private func reload() {
+        boards = boardsRepo.all()
         payees = payeesRepo.all()
         apiKey = Keychain.get(SecretKey.aiAPIKey) ?? ""
         localBackups = LocalBackupRepository.list()

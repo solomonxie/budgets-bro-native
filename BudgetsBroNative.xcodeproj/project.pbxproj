@@ -10,9 +10,11 @@
 		03FECEA844A55183A385C136 /* ICloudBackupRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2C0006154A5E5E508934D73 /* ICloudBackupRepository.swift */; };
 		0A035D94DF1E90EC3C3A3AAA /* BudgetMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = A39B9C9BF3CE5C40805B07F5 /* BudgetMath.swift */; };
 		1364B28B5587DC143705F215 /* ExchangeRatesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A21351A60C5348C2FF4E0199 /* ExchangeRatesView.swift */; };
+		171356CA7D6DF7D96E7BD0D5 /* Migration005Boards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D83B6BAB69E0953B8C28ACE /* Migration005Boards.swift */; };
 		19B5F3A62CCA74417B343557 /* BudgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A85517BD60F614F1E3E53C60 /* BudgetView.swift */; };
 		1B72653888DCFAF00F7E376F /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2CF40BA045AC8A500D1AD5 /* Theme.swift */; };
 		20E67B253E61D1F8F59CC57C /* SigV4.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34C1C98945A8A747F913294D /* SigV4.swift */; };
+		216B168D9D74927B5B63CBBC /* DemoBoardSeeder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55C61B0B364C9851436F90E3 /* DemoBoardSeeder.swift */; };
 		2466052CB74A4ADA7A468435 /* DatabaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A49B89E44C9BE9ABBBDED0 /* DatabaseTests.swift */; };
 		2E4467FFB83C1028D5630CFF /* SplitsAndTargetsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 531EA537181EBD9D087A76AC /* SplitsAndTargetsTests.swift */; };
 		48DC1AC12A4537F8595FF573 /* YNABImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B2C14C4DEE0975B63FAA8D /* YNABImporter.swift */; };
@@ -50,6 +52,7 @@
 		A4F76235B130C658B12A50EB /* BudgetMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 359DF478B1D6DC57C1039008 /* BudgetMathTests.swift */; };
 		ABC8F2D6022818C6CAE9CD31 /* Amortization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DB293B344AD5E4B745274AC /* Amortization.swift */; };
 		AE116DD2B59F091D8E5B7FE9 /* CSV.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15989935D7D32CD5AFFC19E9 /* CSV.swift */; };
+		B139F1FAB19429CE45C85180 /* BoardsRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = F27CB1786468F0EB584CC3C8 /* BoardsRepository.swift */; };
 		B5DBB7C59A0B2C8414F722EB /* TransactionsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 108E34C910C8472F67A2F072 /* TransactionsListView.swift */; };
 		B76E2800843B6FD8A7EB7546 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B9167907ADAE4925425D1E /* Keychain.swift */; };
 		B99360B0FE1A52E3A40E002E /* Migration003LoanTrackingRecurring.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C348B4830B3DA24B0B213F /* Migration003LoanTrackingRecurring.swift */; };
@@ -111,8 +114,10 @@
 		3DD58D1E25B25BF458F0DDDB /* InsightsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsView.swift; sourceTree = "<group>"; };
 		452E7C1317F3CDB46978540C /* AppLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLock.swift; sourceTree = "<group>"; };
 		49E616F6AD6C62FDF4297642 /* ScheduledTransactionsRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledTransactionsRepository.swift; sourceTree = "<group>"; };
+		4D83B6BAB69E0953B8C28ACE /* Migration005Boards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Migration005Boards.swift; sourceTree = "<group>"; };
 		531EA537181EBD9D087A76AC /* SplitsAndTargetsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitsAndTargetsTests.swift; sourceTree = "<group>"; };
 		55B2C14C4DEE0975B63FAA8D /* YNABImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YNABImporter.swift; sourceTree = "<group>"; };
+		55C61B0B364C9851436F90E3 /* DemoBoardSeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoBoardSeeder.swift; sourceTree = "<group>"; };
 		57D488FB29F1AB0DDCEF19FE /* HouseHuntView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HouseHuntView.swift; sourceTree = "<group>"; };
 		5ED2911FBB171751BAC32623 /* AddTransactionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTransactionView.swift; sourceTree = "<group>"; };
 		5F5A5EDF8E42304165C47019 /* AccountsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsView.swift; sourceTree = "<group>"; };
@@ -152,6 +157,7 @@
 		E87276C4F6241146CA107BF1 /* AccountsRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsRepository.swift; sourceTree = "<group>"; };
 		EA373A0D3AB4F6E03A597B09 /* GenericCSVImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenericCSVImportView.swift; sourceTree = "<group>"; };
 		EF50654F0DF6EC27448FEA3C /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		F27CB1786468F0EB584CC3C8 /* BoardsRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardsRepository.swift; sourceTree = "<group>"; };
 		F8ADFA219316F43A75208905 /* CostOfLiving.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CostOfLiving.swift; sourceTree = "<group>"; };
 		F8B63C6F06701DF6D29118E5 /* ExchangeRatesClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExchangeRatesClient.swift; sourceTree = "<group>"; };
 		F977E5615E697F9BE4D9EC13 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
@@ -370,6 +376,7 @@
 				DF885E7121F2511233395CB6 /* Migration002AddBudgetEntriesUniqueIndex.swift */,
 				C3C348B4830B3DA24B0B213F /* Migration003LoanTrackingRecurring.swift */,
 				B165833F299081A36609ECF6 /* Migration004TargetsAndSplits.swift */,
+				4D83B6BAB69E0953B8C28ACE /* Migration005Boards.swift */,
 			);
 			path = Migrations;
 			sourceTree = "<group>";
@@ -378,6 +385,7 @@
 			isa = PBXGroup;
 			children = (
 				319810BEDD9767E279003AD2 /* Database.swift */,
+				55C61B0B364C9851436F90E3 /* DemoBoardSeeder.swift */,
 				B1EF394564C818334063294F /* Migrations */,
 				F445E41AEDFB08BC2B409C08 /* Repositories */,
 			);
@@ -453,6 +461,7 @@
 			children = (
 				E87276C4F6241146CA107BF1 /* AccountsRepository.swift */,
 				079BB17EFCA2B96C351A04AD /* AppSettingsRepository.swift */,
+				F27CB1786468F0EB584CC3C8 /* BoardsRepository.swift */,
 				3527666F603BB1B288E8B5F8 /* BudgetRepository.swift */,
 				CEF098AD773D94F08BD67C2A /* CategoriesRepository.swift */,
 				26BBB63F3BE7A069A18419D4 /* HouseHuntRepository.swift */,
@@ -573,6 +582,7 @@
 				4D6F8F0CA9292199D820D2DC /* AppLock.swift in Sources */,
 				7E735D14C4D785B23B7D970C /* AppSettingsRepository.swift in Sources */,
 				62D8066FDABB20274CB9391D /* BabyStepsView.swift in Sources */,
+				B139F1FAB19429CE45C85180 /* BoardsRepository.swift in Sources */,
 				0A035D94DF1E90EC3C3A3AAA /* BudgetMath.swift in Sources */,
 				5E7E3D928B5CBB3BFA539EA5 /* BudgetRepository.swift in Sources */,
 				19B5F3A62CCA74417B343557 /* BudgetView.swift in Sources */,
@@ -584,6 +594,7 @@
 				CF75DA4CDBA4A1F8EC530C24 /* CostOfLiving.swift in Sources */,
 				6C4EB74228697FCEE613968F /* CostOfLivingView.swift in Sources */,
 				CF630FF005CE29D644AC4128 /* Database.swift in Sources */,
+				216B168D9D74927B5B63CBBC /* DemoBoardSeeder.swift in Sources */,
 				5C74F402C79171F6FBA20672 /* ExchangeRatesClient.swift in Sources */,
 				1364B28B5587DC143705F215 /* ExchangeRatesView.swift in Sources */,
 				DCE602E9227553F19666669D /* FIREProjectionView.swift in Sources */,
@@ -601,6 +612,7 @@
 				A3F9FDF7189FD808FD96B407 /* Migration002AddBudgetEntriesUniqueIndex.swift in Sources */,
 				B99360B0FE1A52E3A40E002E /* Migration003LoanTrackingRecurring.swift in Sources */,
 				F0AAE845D3A5978C50C115D5 /* Migration004TargetsAndSplits.swift in Sources */,
+				171356CA7D6DF7D96E7BD0D5 /* Migration005Boards.swift in Sources */,
 				F43F86652B0ACF530A4D8791 /* Models.swift in Sources */,
 				5ECF1F2DB1196F7132B870B1 /* MortgageCalculatorView.swift in Sources */,
 				E7F32B0B0EBDCB3EAB377AFC /* PayeesRepository.swift in Sources */,
