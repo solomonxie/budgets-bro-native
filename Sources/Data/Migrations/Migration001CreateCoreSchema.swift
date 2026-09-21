@@ -39,7 +39,8 @@ enum Migration001CreateCoreSchema {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         category_id INTEGER NOT NULL REFERENCES categories(id),
         month TEXT NOT NULL,
-        assigned_cents INTEGER NOT NULL DEFAULT 0
+        assigned_cents INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(category_id, month)
     );
 
     CREATE TABLE transactions (

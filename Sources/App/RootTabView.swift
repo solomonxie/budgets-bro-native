@@ -53,7 +53,7 @@ struct RootTabView: View {
             AddTransactionView()
         }
         .sheet(isPresented: $isSettingsPresented) {
-            Text("Settings")
+            SettingsView()
         }
     }
 
