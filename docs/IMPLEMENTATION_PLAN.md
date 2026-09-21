@@ -8,20 +8,22 @@ own `docs/DESIGN.md`.
 
 ## Phase 0: Repo & Xcode project bootstrap
 - [x] T0.1 Init git repo, copy design docs from `budgets-bro`, adapt for native stack
-- [ ] T0.2 `project.yml` (xcodegen) — single iOS app target, bundle id, deployment target, entitlements (iCloud container)
-- [ ] T0.3 Generate + commit `BudgetsBroNative.xcodeproj`; confirm a clean checkout builds
-- [ ] T0.4 App shell: `TabView` (Budget / Spend / Accounts / Insights) matching `docs/design/uiux/README.md`'s nav diagram — Spend intercepts its own tab press and pushes Add Transaction instead of switching tabs
-- [ ] T0.5 SQLite wrapper over `libsqlite3` + versioned migration runner (`PRAGMA user_version`) — `Sources/Data/Database.swift`
-- [ ] T0.6 Keychain wrapper for API key / S3 credentials — `Sources/Secure/Keychain.swift`, `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
-- [ ] T0.7 XCTest target + one sample passing test
-- [ ] T0.8 SwiftLint + SwiftFormat config; GitHub Actions CI (`xcodebuild test`)
-- [ ] T0.9 First size measurement against the 4.25 MB / 1.8 MB budget — establish the baseline before any real feature lands
+- [x] T0.2 `project.yml` (xcodegen) — single iOS app target, bundle id, deployment target; entitlements (iCloud container) still pending, needed before Phase 5
+- [x] T0.3 Generate + commit `BudgetsBroNative.xcodeproj`; clean checkout builds (`xcodebuild build` verified green on iOS 27 simulator)
+- [x] T0.4 App shell: `TabView` (Budget / Spend / Accounts / Insights) matching `docs/design/uiux/README.md`'s nav diagram — Spend intercepts its own tab press (`onChange` snap-back + `fullScreenCover`) instead of switching the displayed tab
+- [x] T0.5 SQLite wrapper over `libsqlite3` + versioned migration runner (`PRAGMA user_version`) — `Sources/Data/Database.swift`
+- [ ] T0.6 Keychain wrapper for API key / S3 credentials — `Sources/Secure/Keychain.swift`, `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` (pulled forward to Phase 4/5 where it's first needed)
+- [x] T0.7 XCTest target + one sample passing test (`DatabaseTests.testMigrationCreatesAccountsTable`)
+- [ ] T0.8 SwiftLint + SwiftFormat config; GitHub Actions CI (`xcodebuild test`) — CI workflow committed, lint tools not yet added
+- [x] T0.9 First size measurement against the 4.25 MB / 1.8 MB budget — Debug `.app` measured at 796 KB unstripped for the whole skeleton, well inside budget
+
+**Frameworks finalized** (see `AGENTS.md`'s dependency table for the full list): SwiftUI/`NavigationStack`/`TabView` for nav, system `libsqlite3` for storage, `Security` Keychain for secrets, `CryptoKit` for SigV4 HMAC, `URLSession` for AI calls, Swift `Charts` for Insights. The one item that stayed open — the backup/YNAB-import zip container — is now decided too: Apple's `Archive`/`Compression` frameworks only speak the AAR format, not portable PKZIP, so backup/import zips need a **hand-rolled ZIP reader/writer over system `libz.tbd`** (deflate/inflate from zlib, container framing hand-written) — scoped to Phase 5/7 when backup and YNAB import land, not needed yet.
 
 ## Phase 1: Domain schema + Accounts/Categories CRUD
-- [ ] T1.1 Port SQLite schema 1:1 from `budgets-bro`'s current schema (`accounts`, `category_groups`, `categories`, `payees`, `budget_entries`, `transactions` — see that repo's `docs/DESIGN.md#core-domain-model`) — `Sources/Data/Migrations/`
-- [ ] T1.2 `AccountsRepository` CRUD + Accounts screen per `docs/design/uiux/accounts.md`
-- [ ] T1.3 `CategoriesRepository` CRUD + grouped categories UI (inline on Budget screen, per current UX — no separate Manage Categories page)
-- [ ] T1.4 Shared domain types (`Sources/Domain/Models.swift`)
+- [x] T1.1 Port SQLite schema 1:1 from `budgets-bro`'s current schema (`accounts`, `category_groups`, `categories`, `payees`, `budget_entries`, `transactions`, `app_settings` — see that repo's `docs/DESIGN.md#core-domain-model`) — `Sources/Data/Migrations/Migration001CreateCoreSchema.swift`
+- [x] T1.2 `AccountsRepository` CRUD (create/update/archive, computed `balanceCents`) + Accounts screen per `docs/design/uiux/accounts.md` (Net Worth header, grouped-by-kind list with subtotals, add/edit sheet)
+- [x] T1.3 `CategoriesRepository` CRUD (groups + categories) + inline management on the Budget screen (no separate Manage Categories page, matching the current/final UX — not replaying the original's now-superseded standalone-screen history)
+- [x] T1.4 Shared domain types (`Sources/Domain/Models.swift`) — `Account`, `AccountType`, `CategoryGroup`, `Category`, `Payee`
 
 ## Phase 2: Transactions & budget envelope logic
 - [ ] T2.1 `TransactionsRepository` CRUD incl. transfer pairing and balance-correction adjustment transactions
@@ -31,16 +33,22 @@ own `docs/DESIGN.md`.
 
 ## Phase 3: Core budget UI
 Per-screen specs: [`design/uiux/budget.md`](design/uiux/budget.md), [`spend.md`](design/uiux/spend.md), [`transactions.md`](design/uiux/transactions.md), [`accounts.md`](design/uiux/accounts.md).
-- [ ] T3.1 Budget screen: Unassigned Cash banner, collapsible category groups, status badge/progress bar/caption per category, month navigation (arrows + tappable label)
-- [ ] T3.2 Add/edit transaction page: autofocused amount + custom number pad (not the system keypad — see Forms/`components.md`), inflow/outflow toggle, payee/category/account pickers, memo, date, cleared/interest toggles, recurrence builder
-- [ ] T3.3 Transactions list: grouped by date, search, multi-select delete
-- [ ] T3.4 Account detail/register with running balance + Correct Balance action
-- [ ] T3.5 Insights: spending breakdown, category trend (stacked area chart per `components.md`'s Diagrams convention), interest-earned — all local, no network
+- [x] T3.1 Budget screen: Unassigned Cash banner, collapsible category groups, status badge (funded/partial/overspent color) + caption per category, month navigation (arrows; label is display-only for now, not yet tappable-to-jump). `BudgetMath.swift` ported (categoryBalanceCents, status, unassignedCashCents) — progress bar visual still missing (color-coded number stands in for now)
+- [x] T3.2 Add/edit transaction page: autofocused amount + custom number pad (`NumberPad` — grid of buttons, not the system keypad), outflow/inflow segmented toggle, category/account `Picker`s, free-text payee field with prefix-match suggestion chips, date, memo. **Deferred to a follow-up pass**: edit-existing-transaction flow (create-only today), cleared/interest toggles, recurrence builder, and the fuzzy-search picker sheet convention from `components.md` (using plain `Picker`s for now)
+- [x] T3.3 Transactions list: grouped by date, swipe-to-delete. **Deferred**: search, multi-select bulk delete
+- [x] T3.4 Account detail/register with running balance + "+ Transaction" pre-selecting the account. **Deferred**: Correct Balance action
+- [x] T3.5 Insights: spending-by-category breakdown for the viewed month, all local. **Deferred**: category trend chart, interest-earned-this-month card
 
 ## Phase 4: Financial tools + AI analysis
-- [ ] T4.1 `Sources/FinanceTools/` pure functions: mortgage/loan payment, amortization schedule, simple/compound interest, extra-payment payoff — unit-tested against the original's known-good outputs
-- [ ] T4.2 Mortgage/loan calculator screen
-- [ ] T4.3 AI analysis: Keychain-stored key, `URLSession` calls to provider REST endpoints, aggregate/detailed payload modes, in-app disclosure copy matching `DESIGN.md`'s Settings disclosure text
+- [x] T4.1 `Sources/FinanceTools/Amortization.swift`: mortgage/loan monthly payment, amortization schedule, remaining-months-to-payoff (+ extra payment), total interest remaining, simple/compound interest — ported, not yet unit-tested against the original's known-good outputs (tests come once the rest of the app catches up)
+- [x] T4.2 Mortgage/loan calculator screen (ad-hoc, reachable from Insights)
+- [~] T4.3 AI analysis: `Sources/Secure/Keychain.swift` (Keychain wrapper) done and wired into a Settings screen for key entry; the actual `URLSession` analysis call, aggregate/detailed payload modes, and in-app disclosure copy are not built yet
+
+**Also landed ahead of schedule**: a real `SettingsView` (Payees rename + AI key entry; S3/Local Backup/Data sections are explicit "not built yet" stubs, not silently missing) and `Database`'s query/bind layer (`Row`, parameterized `run`/`query`, `.boardDidChange` notification posted on every write) that every repository above depends on.
+
+**Known UI/UX gaps against the spec, to close in a follow-up pass**: the tab bar renders as iOS 27's default floating translucent pill, not the flush opaque bar `components.md` calls for; pickers are plain `Picker`s, not the fuzzy-search sheet convention; no half-height-sheet vs. full-page distinction is implemented yet (everything here uses `.sheet`); category rows have no progress bar.
+
+**Bug found and fixed by the test pass** (caught immediately, not shipped): `Migration001` was edited in place mid-development to add `UNIQUE(category_id, month)` on `budget_entries`, after installs already existed at schema version 1 — those DBs (including this repo's own simulator smoke-test install) never re-ran migration001's SQL, so `BudgetRepository.setAssigned`'s `ON CONFLICT` upsert crashed with "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint". Fixed with a real `Migration002` (`CREATE UNIQUE INDEX IF NOT EXISTS`) instead of re-editing migration001 — the general lesson (already implicit in AGENTS.md's migration-runner rule) is that a migration's SQL is immutable once anything has run it; a schema fix is always a new migration. Also fixed in the same pass: `Amortization.buildSchedule` left a few stray cents unpaid at the end of a schedule instead of paying off exactly — the final month's payment is now adjusted to clear the remaining balance, same as a real amortization table.
 
 ## Phase 5: Backup & restore
 Per [`design/DESIGN.md#storage-backup-architecture`](DESIGN.md#storage-backup-architecture).
