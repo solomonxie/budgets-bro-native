@@ -45,6 +45,9 @@ struct AccountDetailView: View {
                     if let account, account.type == .tracking {
                         trackingCard(account: account)
                     }
+                    if let account, account.type == .creditCard {
+                        creditCardCard(account: account)
+                    }
 
                     TransactionsListView(accountId: accountId)
                         .frame(minHeight: 400)
@@ -118,6 +121,29 @@ struct AccountDetailView: View {
                 Text(trackingValueCents.map { Money.wholeDollars($0) } ?? "—").foregroundStyle(.white)
             }
             Button("+ Log Value") { isLogValuePresented = true }.foregroundStyle(Theme.accent)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
+    }
+
+    /// "Can I pay this statement in full" derives from rows already
+    /// stored, no schema change — see docs/DESIGN.md's Credit-card payment
+    /// envelope backlog item. Simplified vs. spending-a-reserved-category
+    /// tracking: the balance itself already nets every categorized charge
+    /// and payment, so "what's owed" is exactly `abs(balanceCents)`.
+    private func creditCardCard(account: Account) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("CREDIT CARD").font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Text("Statement Balance (owed)").foregroundStyle(.white)
+                Spacer()
+                Text(Money.wholeDollars(abs(min(balanceCents, 0)))).foregroundStyle(.white)
+            }
+            Text("Already reserved in the categories it was charged to — paying this off doesn't need new money set aside.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
