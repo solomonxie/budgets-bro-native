@@ -1,0 +1,60 @@
+name: BudgetsBroNative
+options:
+  bundleIdPrefix: com.solomonxie
+  deploymentTarget:
+    iOS: "17.0"
+configs:
+  Debug: debug
+  Release: release
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+targets:
+  BudgetsBroNative:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    resources:
+      - path: Resources
+    info:
+      path: Sources/App/Info.plist
+      properties:
+        CFBundleDisplayName: Budgets Bro
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.solomonxie.budgetsbronative
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1"
+    dependencies:
+      - sdk: libsqlite3.tbd
+  BudgetsBroNativeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/BudgetsBroNativeTests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: BudgetsBroNative
+schemes:
+  BudgetsBroNative:
+    build:
+      targets:
+        BudgetsBroNative: all
+        BudgetsBroNativeTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - BudgetsBroNativeTests
+    archive:
+      config: Release

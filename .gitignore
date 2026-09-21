@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+*.pem
+
+# Xcode
+build/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+
+# Signing / secrets
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# SwiftPM (if ever used)
+.swiftpm/
+.build/
+
+# scratch SQLite db for local verification, not the app's runtime db
+*.sqlite-scratch
