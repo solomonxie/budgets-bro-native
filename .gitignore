@@ -13,6 +13,7 @@ DerivedData/
 *.xcscmblueprint
 
 # Signing / secrets
+Config/Local.xcconfig
 *.jks
 *.p8
 *.p12
