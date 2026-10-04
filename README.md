@@ -35,6 +35,7 @@ generated from `project.yml` via [xcodegen](https://github.com/yonaskolb/XcodeGe
 
 ```
 brew install xcodegen   # once
+cp Config/Local.xcconfig.example Config/Local.xcconfig   # set Team ID + bundle id
 xcodegen generate
 open BudgetsBroNative.xcodeproj
 ```

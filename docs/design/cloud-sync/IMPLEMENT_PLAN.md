@@ -17,7 +17,7 @@ file contention.
 - [x] T2.2b Dropped the separate config name field (bucket name is the identifier); region auto-detected via the `x-amz-bucket-region` response header instead of typed by the user; added an optional key-prefix field for buckets shared with other stuff — see `src/sync/s3Provider.ts` — depends: T2.2
 - [x] T2.6 `sync/localProvider.ts` — writes to `Paths.document/backups/<boardId>/latest.zip` (no credentials); toggle in Settings enables/disables it as a `collectProviders()` entry — see `src/sync/localProvider.ts` — depends: T1.3
 - [ ] T2.3 `sync/googleDriveProvider.ts` — `expo-auth-session` PKCE auth against `drive.appdata` scope, Drive REST v3 multipart upload/download to `appDataFolder`; implements `CloudProvider` — see `docs/design/cloud-sync/DESIGN.md` (Providers → Google Drive) — depends: T1.3
-- [ ] T2.4 Google Cloud Console setup (user-owned, blocking T2.3's redirect config) — create OAuth Client ID (type iOS, bundle id `com.example.budgetsbro`), add self as test user for the `drive.appdata` scope, hand back the Client ID — see `docs/design/cloud-sync/DESIGN.md` (Providers → Google Drive) — depends: none
+- [ ] T2.4 Google Cloud Console setup (user-owned, blocking T2.3's redirect config) — create OAuth Client ID (type iOS, bundle id `com.example.budgetsbronative`), add self as test user for the `drive.appdata` scope, hand back the Client ID — see `docs/design/cloud-sync/DESIGN.md` (Providers → Google Drive) — depends: none
 - [ ] T2.5 `app.json` — register the custom URL scheme for the Google OAuth redirect once T2.4's Client ID is in hand — see `app.json` — depends: T2.4
 
 ## Phase 3: Sync orchestration

@@ -9,12 +9,8 @@ configs:
 settings:
   base:
     SWIFT_VERSION: 5.0
-    # Set your own Apple Developer Team ID to build for a physical device —
-    # find it at developer.apple.com/account or Xcode > Settings > Accounts.
-    # Left blank here deliberately: don't commit a real team ID (personal
-    # account info) — override at build time instead, e.g.:
-    #   xcodebuild ... DEVELOPMENT_TEAM=YOUR_TEAM_ID
-    DEVELOPMENT_TEAM: ""
+    # DEVELOPMENT_TEAM / APP_BUNDLE_ID come from Config/Signing.xcconfig,
+    # which includes the gitignored Config/Local.xcconfig (see the .example).
     CODE_SIGN_STYLE: Automatic
 targets:
   BudgetsBroNative:
@@ -31,9 +27,12 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.budgetsbronative
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         TARGETED_DEVICE_FAMILY: "1"
@@ -44,8 +43,12 @@ targets:
     platform: iOS
     sources:
       - path: Tests/BudgetsBroNativeTests
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
     settings:
       base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).tests
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: BudgetsBroNative

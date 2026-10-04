@@ -172,7 +172,7 @@ needed for personal use. Refresh token stored in `secureStore`; access
 token refreshed on demand.
 
 User-side setup (Google Cloud Console, one-time): create an OAuth 2.0
-Client ID (type: iOS), add the app's bundle ID (`com.example.budgetsbro`) and
+Client ID (type: iOS), add the app's bundle ID (`com.example.budgetsbronative`) and
 a custom URL scheme for the redirect. Hand the Client ID back for
 `app.json`'s scheme config — no client secret needed for the PKCE/installed
 -app flow.

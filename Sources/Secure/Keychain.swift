@@ -6,7 +6,8 @@ import Security
 /// items from iCloud/iTunes device backups. See
 /// docs/DESIGN.md#secrets-vs-backups--never-mixed.
 enum Keychain {
-    private static let service = "com.example.budgetsbronative.secrets"
+    // "<bundle id>.secrets" — must stay stable or stored secrets are orphaned.
+    private static let service = (Bundle.main.bundleIdentifier ?? "budgetsbronative") + ".secrets"
 
     static func set(_ value: String, for key: String) {
         let data = Data(value.utf8)
