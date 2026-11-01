@@ -83,10 +83,17 @@ final class BoardContext {
     }
 
     private init() {
-        if let saved = settings.get("active_board_id"), let id = Int(saved) {
-            currentBoardId = id
-        } else {
-            currentBoardId = boardsRepo.all().first?.id ?? 1
-        }
+        currentBoardId = Self.saved(settings, boardsRepo)
+    }
+
+    /// Re-reads the active board after the store is swapped (demo mode).
+    func reload() {
+        currentBoardId = Self.saved(settings, boardsRepo)
+        NotificationCenter.default.post(name: .boardDidChange, object: nil)
+    }
+
+    private static func saved(_ settings: AppSettingsRepository, _ boardsRepo: BoardsRepository) -> Int {
+        if let saved = settings.get("active_board_id"), let id = Int(saved) { return id }
+        return boardsRepo.all().first?.id ?? 1
     }
 }

@@ -45,6 +45,17 @@ Physical iPhone only for QA — same policy as the original, see [`AGENTS.md`](A
 ### Xcode 26.4+ required
 Same SDK/toolchain floor as the original — see `docs/DESIGN.md`.
 
+### Install
+```
+make device TEAM_ID=...          # STORE=us (Canada/US) by default
+make device TEAM_ID=... STORE=cn # App Store region → Info.plist AppStoreRegion, read via storeRegion()
+make sim
+```
+
+## Demo
+- Settings → Demo mode: switches instantly to a separate database (`budgetsbronative-demo.db`); real data untouched. App lock, AI keys and backups are hidden while it's on.
+- Preset data: `demo/board.json` — a year of household accounts, budgets, loans, investments, purchase items, schedules, house-hunt listings. Dates relative: `"@today-3"`, `"@month-2 15"`, `"@month+1 9"`; future rows skipped. Re-seeded daily or via Reset demo data.
+
 ## Status
 Repo bootstrap + docs port done. Native project scaffold and screen-by-screen
 port tracked in [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).

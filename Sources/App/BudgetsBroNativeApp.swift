@@ -4,11 +4,17 @@ import SwiftUI
 struct BudgetsBroNativeApp: App {
     @Environment(\.scenePhase) private var scenePhase
     private let appLock = AppLockController.shared
+    @AppStorage(AppData.demoKey) private var demoOn = false
+
+    init() {
+        DemoSeed.seedIfNeeded()
+    }
 
     var body: some Scene {
         WindowGroup {
             ZStack {
                 RootTabView()
+                    .id(demoOn)
                 if appLock.isLocked {
                     LockScreenView(controller: appLock)
                 }
@@ -23,6 +29,7 @@ struct BudgetsBroNativeApp: App {
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
             case .active:
+                DemoSeed.seedIfNeeded()
                 appLock.appWillEnterForeground()
                 AutoPostRunner.run()
             case .background:
@@ -40,7 +47,7 @@ struct BudgetsBroNativeApp: App {
     /// seeder directly for a deliberate, on-demand re-creation.
     private static func ensureDemoBoardSeededOnce() {
         let settings = AppSettingsRepository()
-        guard settings.get("demo_board_seeded") == nil else { return }
+        guard !AppData.isDemo, settings.get("demo_board_seeded") == nil else { return }
         let originalBoardId = BoardContext.shared.currentBoardId
         // Checked before seeding switches the active board out from under
         // this query — a fresh install's default board is empty, so land on

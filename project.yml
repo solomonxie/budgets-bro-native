@@ -12,18 +12,25 @@ settings:
     # DEVELOPMENT_TEAM / APP_BUNDLE_ID come from Config/Signing.xcconfig,
     # which includes the gitignored Config/Local.xcconfig (see the .example).
     CODE_SIGN_STYLE: Automatic
+    # App Store region baked into Info.plist (AppStoreRegion): us (Canada/US) or cn. `make device STORE=cn`.
+    STORE: us
 targets:
   BudgetsBroNative:
     type: application
     platform: iOS
     sources:
       - path: Sources
+      # Preset data for demo mode (Settings > Demo).
+      - path: demo
+        type: folder
+        buildPhase: resources
     resources:
       - path: Resources
     info:
       path: Sources/App/Info.plist
       properties:
         CFBundleDisplayName: Budgets Bro
+        AppStoreRegion: $(STORE)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

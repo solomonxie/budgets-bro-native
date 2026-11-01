@@ -8,6 +8,8 @@ final class Database {
     static let shared = Database()
 
     private var handle: OpaquePointer
+    /// Off during a bulk load (demo seed), so views don't reload per row.
+    var postsChanges = true
 
     private init() {
         handle = Database.open(at: Database.storeURL)
@@ -16,7 +18,21 @@ final class Database {
 
     static var storeURL: URL {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return dir.appendingPathComponent("budgetsbronative.db")
+        return dir.appendingPathComponent(AppData.isDemo ? "budgetsbronative-demo.db" : "budgetsbronative.db")
+    }
+
+    /// Reconnects at `storeURL` — after demo mode flips. `wipe` starts that store from empty.
+    func reopen(wipe: Bool = false) {
+        checkpoint()
+        sqlite3_close(handle)
+        if wipe {
+            for suffix in ["", "-wal", "-shm"] {
+                try? FileManager.default.removeItem(atPath: Database.storeURL.path + suffix)
+            }
+        }
+        handle = Database.open(at: Database.storeURL)
+        configureAndMigrate()
+        NotificationCenter.default.post(name: .boardDidChange, object: nil)
     }
 
     private static func open(at url: URL) -> OpaquePointer {
@@ -100,7 +116,7 @@ final class Database {
             assertionFailure("SQL step error: \(lastError) — statement: \(sql)")
             return 0
         }
-        NotificationCenter.default.post(name: .boardDidChange, object: nil)
+        if postsChanges { NotificationCenter.default.post(name: .boardDidChange, object: nil) }
         return sqlite3_last_insert_rowid(handle)
     }
 

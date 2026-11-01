@@ -45,10 +45,14 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 boardSection
-                appLockSection
-                aiKeysSection
-                backupSection
+                // App lock, keys and backups belong to the real app, never to demo data.
+                if !AppData.isDemo {
+                    appLockSection
+                    aiKeysSection
+                    backupSection
+                }
                 dataSection
+                DemoSection()
             }
             .navigationTitle("Settings")
             .sheet(isPresented: $isSettingPasscode) { passcodeSheet }
