@@ -29,6 +29,17 @@ struct AccountDetailView: View {
     @State private var homeValueHistory: [(valueCents: Int, effectiveDate: String, note: String?)] = []
     @State private var monthlyPaymentCents = 0
     @State private var valueTrend: [(month: String, owedCents: Int, equityCents: Int)] = []
+    @State private var principalHistory: [(valueCents: Int, effectiveDate: String, note: String?)] = []
+    @State private var isLoanDetailsExpanded = false
+    @State private var isLogPrincipalPresented = false
+    @State private var newPrincipalText = ""
+    @State private var projectedPayoffMonths: Int?
+    @State private var projectedPayoffDate: String?
+    @State private var remainingInterestCents: Int?
+    @State private var scheduledForAccount: [ScheduledTransaction] = []
+    @State private var isScheduledExpanded = false
+    @State private var payeeNamesById: [Int: String] = [:]
+    @State private var categoryNamesById: [Int: String] = [:]
 
     var body: some View {
         ZStack {
@@ -52,6 +63,9 @@ struct AccountDetailView: View {
                     }
                     if let account, account.type == .creditCard {
                         creditCardCard(account: account)
+                    }
+                    if !scheduledForAccount.isEmpty {
+                        scheduledCard
                     }
 
                     TransactionsListView(accountId: accountId)
@@ -87,6 +101,9 @@ struct AccountDetailView: View {
         }
         .sheet(isPresented: $isLogValuePresented) {
             logValueSheet
+        }
+        .sheet(isPresented: $isLogPrincipalPresented) {
+            logPrincipalSheet
         }
         .task { reload() }
         .onReceive(NotificationCenter.default.publisher(for: .boardDidChange)) { _ in reload() }
@@ -142,21 +159,7 @@ struct AccountDetailView: View {
                 .frame(maxWidth: .infinity)
 
             Divider().background(Theme.border)
-            HStack {
-                Text("LOAN DETAILS").font(.caption2.bold()).foregroundStyle(Theme.textMuted)
-                Spacer()
-                NavigationLink {
-                    MortgageCalculatorView()
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(currentRatePercent.map { String(format: "%.3g%% · %@/mo", $0, Money.exact(monthlyPaymentCents)) } ?? "Add rate")
-                            .font(.subheadline.bold())
-                        Image(systemName: "chevron.right").font(.caption2)
-                    }
-                    .foregroundStyle(Theme.text)
-                }
-            }
-            Button("+ Add Rate") { isAddRatePresented = true }.foregroundStyle(Theme.accent)
+            loanDetailsSection
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
@@ -183,15 +186,122 @@ struct AccountDetailView: View {
         .frame(height: 130)
     }
 
+    /// Ported from budgets-bro's `LoanDetailsCard` — a tap-to-expand
+    /// summary row ("rate% · $payment/mo") revealing Rate, Scheduled
+    /// payment, Projected payoff and Est. remaining interest, plus the
+    /// logged remaining-principal readings. No extra-payment what-if
+    /// input here — that lives in the standalone MortgageCalculatorView,
+    /// same split as the original (LoanDetailsCard.tsx's own comment: "no
+    /// what-if inputs... belong to the payoff/early-repayment
+    /// calculators").
+    private var loanDetailsSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation { isLoanDetailsExpanded.toggle() }
+            } label: {
+                HStack {
+                    Text("LOAN DETAILS").font(.caption2.bold()).foregroundStyle(Theme.textMuted)
+                    Spacer()
+                    if let rate = currentRatePercent {
+                        Text(String(format: "%.2f%% · %@/mo", rate, Money.exact(monthlyPaymentCents)))
+                            .font(.subheadline.bold()).foregroundStyle(Theme.text)
+                    }
+                    Text(isLoanDetailsExpanded ? "▾" : "›").foregroundStyle(Theme.textMuted)
+                }
+            }
+            if isLoanDetailsExpanded {
+                if currentRatePercent == nil {
+                    Text("Add a rate to see the payment schedule and projected payoff.")
+                        .font(.footnote).foregroundStyle(Theme.textMuted)
+                } else {
+                    loanDetailRow("Rate", String(format: "%.2f%%", currentRatePercent!))
+                    loanDetailRow("Scheduled payment", "\(Money.exact(monthlyPaymentCents))/mo")
+                    if let date = projectedPayoffDate, let months = projectedPayoffMonths {
+                        loanDetailRow("Projected payoff", "\(date) (\(months) mo)")
+                    } else {
+                        loanDetailRow("Projected payoff", "Payment too low to pay off")
+                    }
+                    loanDetailRow("Est. remaining interest", remainingInterestCents.map { Money.wholeDollars($0) } ?? "—")
+                }
+                ForEach(principalHistory, id: \.effectiveDate) { entry in
+                    HStack {
+                        Text(Money.wholeDollars(entry.valueCents)).font(.subheadline.bold()).foregroundStyle(Theme.text)
+                        Spacer()
+                        Text("effective \(entry.effectiveDate)").font(.caption).foregroundStyle(Theme.textMuted)
+                    }
+                    .padding(.horizontal).padding(.vertical, 10)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 1))
+                }
+                Button("+ Update Remaining Principal") { isLogPrincipalPresented = true }
+                    .foregroundStyle(Theme.accent).font(.footnote.bold())
+                if currentRatePercent == nil {
+                    Button("+ Add Rate") { isAddRatePresented = true }.foregroundStyle(Theme.accent).font(.footnote.bold())
+                }
+            }
+        }
+    }
+
+    private func loanDetailRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label).font(.caption).foregroundStyle(Theme.textMuted)
+            Spacer()
+            Text(value).font(.caption.bold()).foregroundStyle(Theme.text)
+        }
+    }
+
+    /// Ported from budgets-bro's `AccountDetailScreen` scheduled card —
+    /// this account's recurring schedules. RN also lists already-posted
+    /// future-dated transactions and a pending-approval button here; this
+    /// app auto-posts schedules with no manual approval queue (see
+    /// ScheduledTransactionsRepository's doc comment), so there is nothing
+    /// to approve — only the recurring list itself is shown.
+    private var scheduledCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation { isScheduledExpanded.toggle() }
+            } label: {
+                HStack {
+                    Text("Scheduled (\(scheduledForAccount.count))").font(.subheadline.bold()).foregroundStyle(Theme.text)
+                    Spacer()
+                    Text(isScheduledExpanded ? "▾" : "▸").font(.caption).foregroundStyle(Theme.textMuted)
+                }
+            }
+            if isScheduledExpanded {
+                ForEach(scheduledForAccount) { schedule in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(schedule.payeeId.flatMap { payeeNamesById[$0] } ?? "No Payee")
+                                .font(.subheadline.bold()).foregroundStyle(Theme.text)
+                            Text([schedule.categoryId.flatMap { categoryNamesById[$0] }, "Next: \(schedule.nextDate)"].compactMap { $0 }.joined(separator: " · "))
+                                .font(.caption2).foregroundStyle(Theme.textMuted)
+                        }
+                        Spacer()
+                        Text(Money.exact(schedule.amountCents))
+                            .font(.subheadline.bold())
+                            .foregroundStyle(schedule.amountCents < 0 ? Theme.negative : Theme.positive)
+                    }
+                    .padding(.vertical, 8)
+                    .opacity(0.7)
+                    Divider().background(Theme.border)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
+        .padding(.horizontal)
+    }
+
     private func trackingCard(account: Account) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("TRACKING VALUE").font(.caption2.bold()).foregroundStyle(Theme.textMuted)
+            Text("BALANCE TREND").font(.caption2.bold()).foregroundStyle(Theme.textMuted)
             HStack {
                 Text("Current Value").foregroundStyle(Theme.text)
                 Spacer()
                 Text(trackingValueCents.map { Money.wholeDollars($0) } ?? "—").foregroundStyle(Theme.text)
             }
-            Button("+ Log Value") { isLogValuePresented = true }.foregroundStyle(Theme.accent)
+            Button("+ Update Account Value") { isLogValuePresented = true }.foregroundStyle(Theme.accent)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
@@ -293,6 +403,30 @@ struct AccountDetailView: View {
         }
     }
 
+    private var logPrincipalSheet: some View {
+        NavigationStack {
+            Form {
+                TextField("Amount still owed", text: $newPrincipalText).keyboardType(.decimalPad)
+            }
+            .navigationTitle("Remaining Principal")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { isLogPrincipalPresented = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        if let value = Double(newPrincipalText) {
+                            loanRepo.addValueReading(accountId: accountId, kind: "principal", valueCents: Int((value * 100).rounded()), effectiveDate: today(), note: nil)
+                        }
+                        newPrincipalText = ""
+                        isLogPrincipalPresented = false
+                        reload()
+                    }
+                }
+            }
+        }
+    }
+
     private func correctBalance() {
         guard let target = Double(correctedBalanceText) else { return }
         let targetCents = Int((target * 100).rounded())
@@ -316,8 +450,19 @@ struct AccountDetailView: View {
             remainingPrincipalCents = loanRepo.remainingPrincipalCents(account: account)
             homeValueHistory = loanRepo.valueHistory(accountId: accountId, kind: "value")
             homeValueCents = homeValueHistory.first?.valueCents ?? 0
+            principalHistory = loanRepo.valueHistory(accountId: accountId, kind: "principal")
             if let rate = currentRatePercent {
                 monthlyPaymentCents = Amortization.monthlyPaymentCents(principalCents: remainingPrincipalCents, annualRatePercent: rate, termMonths: account.termMonths ?? 360)
+                let payoffMonths = Amortization.remainingMonthsToPayoff(balanceCents: remainingPrincipalCents, annualRatePercent: rate, paymentCents: monthlyPaymentCents)
+                if payoffMonths < .max {
+                    projectedPayoffMonths = payoffMonths
+                    projectedPayoffDate = Calendar.current.date(byAdding: .month, value: payoffMonths, to: Date()).map(formatDate)
+                    remainingInterestCents = Amortization.totalInterestRemainingCents(balanceCents: remainingPrincipalCents, annualRatePercent: rate, paymentCents: monthlyPaymentCents)
+                } else {
+                    projectedPayoffMonths = nil
+                    projectedPayoffDate = nil
+                    remainingInterestCents = nil
+                }
             }
             let months = (0 ..< 12).reversed().compactMap { offset -> String? in
                 Calendar.current.date(byAdding: .month, value: -offset, to: Date()).map { monthString(from: $0) }
@@ -335,5 +480,8 @@ struct AccountDetailView: View {
         if let account, account.type == .tracking {
             trackingValueCents = loanRepo.latestValueCents(accountId: accountId, kind: "value")
         }
+        scheduledForAccount = ScheduledTransactionsRepository().all().filter { $0.accountId == accountId }
+        payeeNamesById = Dictionary(uniqueKeysWithValues: PayeesRepository().all().map { ($0.id, $0.name) })
+        categoryNamesById = Dictionary(uniqueKeysWithValues: CategoriesRepository().categories().map { ($0.id, $0.name) })
     }
 }

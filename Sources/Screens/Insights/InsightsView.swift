@@ -104,7 +104,7 @@ struct InsightsView: View {
                 legendRow(color: Theme.textMuted, name: "All Others", cents: otherCents)
             }
             if breakdown.isEmpty {
-                Text("No spending this month").font(.subheadline).foregroundStyle(Theme.textMuted)
+                Text("No spending recorded this month.").font(.subheadline).foregroundStyle(Theme.textMuted)
             }
         }
         .padding()
@@ -115,9 +115,9 @@ struct InsightsView: View {
     private func legendRow(color: Color, name: String, cents: Int) -> some View {
         HStack {
             Circle().fill(color).frame(width: 9, height: 9)
-            Text(name).foregroundStyle(Theme.text)
+            Text(name).font(.system(size: 14)).foregroundStyle(Theme.text)
             Spacer()
-            Text(Money.wholeDollars(cents)).fontWeight(.bold).foregroundStyle(Theme.text)
+            Text(Money.wholeDollars(cents)).font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.text)
         }
         .padding(.vertical, 6)
         .overlay(alignment: .bottom) { Divider().background(Theme.border) }
@@ -128,13 +128,14 @@ struct InsightsView: View {
             Text("CATEGORY TRENDS").font(.caption.bold()).foregroundStyle(Theme.textMuted)
             if let scrubIndex, trendMonths.indices.contains(scrubIndex) {
                 Text("\(monthLabel(trendMonths[scrubIndex])) · \(Money.wholeDollars(monthTotals[scrubIndex]))")
-                    .font(.subheadline.bold()).foregroundStyle(Theme.text)
+                    .font(.system(size: 30, weight: .bold)).foregroundStyle(Theme.text)
             } else {
-                Text("Drag along the chart to read a month").font(.caption2).foregroundStyle(Theme.textMuted)
+                Text("All time — drag to scroll, tap an icon to hide/show that category. Dashed line is your 12-month average.")
+                    .font(.system(size: 11)).foregroundStyle(Theme.textMuted)
             }
 
             if trendSeries.isEmpty {
-                Text("Not enough history yet").font(.subheadline).foregroundStyle(Theme.textMuted)
+                Text("Not enough history yet.").font(.subheadline).foregroundStyle(Theme.textMuted)
             } else {
                 stackedAreaChart
                 legendChips
@@ -145,44 +146,86 @@ struct InsightsView: View {
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.border, lineWidth: 1))
     }
 
-    private var stackedAreaChart: some View {
-        Chart {
-            ForEach(visibleSeries, id: \.category.id) { entry in
-                ForEach(Array(entry.values.enumerated()), id: \.offset) { i, value in
-                    AreaMark(
-                        x: .value("Month", i),
-                        y: .value("Spent", Double(value) / 100),
-                        stacking: .standard
-                    )
-                    .foregroundStyle(entry.color.opacity(0.55))
-                }
+    private let chartHeight: CGFloat = 140
+
+    private var maxValue: Int { max(1, monthTotals.max() ?? 1) }
+
+    /// Mirrors InsightsScreen.tsx's `pointY` — same easing (a 4pt top/bottom
+    /// inset) so the custom axis labels below line up with the chart's own
+    /// scale.
+    private func yPosition(for value: Int) -> CGFloat {
+        chartHeight - (CGFloat(value) / CGFloat(maxValue)) * (chartHeight - 8) - 4
+    }
+
+    private var yAxisView: some View {
+        ZStack(alignment: .topTrailing) {
+            ForEach([maxValue, maxValue / 2, 0], id: \.self) { v in
+                Text(Money.compact(v))
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.textMuted)
+                    .offset(y: yPosition(for: v) - 7)
             }
             if let average = averageCents {
-                RuleMark(y: .value("Average", Double(average) / 100))
+                Text("avg")
+                    .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(Theme.accent)
-                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                    .offset(y: yPosition(for: average) - 7)
             }
         }
-        .chartXAxis {
-            AxisMarks(values: .automatic) { value in
-                if let i = value.as(Int.self), trendMonths.indices.contains(i) {
-                    AxisValueLabel(monthShort(trendMonths[i])).foregroundStyle(Theme.textMuted)
+        .padding(.trailing, 6)
+        .frame(width: 44, height: chartHeight, alignment: .topTrailing)
+    }
+
+    private var stackedAreaChart: some View {
+        HStack(alignment: .top, spacing: 0) {
+            yAxisView
+            Chart {
+                ForEach(visibleSeries, id: \.category.id) { entry in
+                    ForEach(Array(entry.values.enumerated()), id: \.offset) { i, value in
+                        AreaMark(
+                            x: .value("Month", i),
+                            y: .value("Spent", Double(value) / 100),
+                            stacking: .standard
+                        )
+                        .foregroundStyle(entry.color.opacity(0.55))
+                    }
+                }
+                if let average = averageCents {
+                    RuleMark(y: .value("Average", Double(average) / 100))
+                        .foregroundStyle(Theme.accent)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
                 }
             }
-        }
-        .chartYAxis { AxisMarks(position: .leading) { _ in AxisValueLabel().foregroundStyle(Theme.textMuted) } }
-        .frame(height: 140)
-        .chartOverlay { proxy in
-            GeometryReader { geometry in
-                Rectangle().fill(Color.clear).contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                let originX = geometry[proxy.plotAreaFrame].origin.x
-                                guard let index: Int = proxy.value(atX: value.location.x - originX) else { return }
-                                scrubIndex = max(0, min(trendMonths.count - 1, index))
-                            }
-                    )
+            .chartXAxis {
+                AxisMarks(values: .automatic) { value in
+                    if let i = value.as(Int.self), trendMonths.indices.contains(i) {
+                        // January (or the leftmost tick) carries the year, the
+                        // same as InsightsScreen.tsx's `isYearMarker` rule —
+                        // otherwise a multi-year range reads as one loop of
+                        // Jan..Dec.
+                        let isYearMarker = i == 0 || trendMonths[i].hasSuffix("-01")
+                        AxisValueLabel {
+                            Text(isYearMarker ? monthShortWithYear(trendMonths[i]) : monthShort(trendMonths[i]))
+                                .font(isYearMarker ? .system(size: 10, weight: .bold) : .system(size: 10))
+                                .foregroundStyle(isYearMarker ? Theme.text : Theme.textMuted)
+                        }
+                    }
+                }
+            }
+            .chartYAxis(.hidden)
+            .frame(height: chartHeight)
+            .chartOverlay { proxy in
+                GeometryReader { geometry in
+                    Rectangle().fill(Color.clear).contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    let originX = geometry[proxy.plotAreaFrame].origin.x
+                                    guard let index: Int = proxy.value(atX: value.location.x - originX) else { return }
+                                    scrubIndex = max(0, min(trendMonths.count - 1, index))
+                                }
+                        )
+                }
             }
         }
     }
@@ -260,6 +303,15 @@ struct InsightsView: View {
         guard let date = formatter.date(from: month) else { return month }
         let display = DateFormatter()
         display.dateFormat = "MMM"
+        return display.string(from: date)
+    }
+
+    private func monthShortWithYear(_ month: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM"
+        guard let date = formatter.date(from: month) else { return month }
+        let display = DateFormatter()
+        display.dateFormat = "MMM ''yy"
         return display.string(from: date)
     }
 

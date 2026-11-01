@@ -29,6 +29,8 @@ struct BudgetView: View {
     @State private var addingCategoryToGroup: CategoryGroup?
     @State private var renamingCategory: Category?
     @State private var renameText = ""
+    @State private var renamingGroup: CategoryGroup?
+    @State private var renameGroupText = ""
     @State private var underfundedCents = 0
     @State private var settingTargetCategory: Category?
     @State private var targetText = ""
@@ -71,6 +73,7 @@ struct BudgetView: View {
         .sheet(isPresented: $isAddGroupPresented) { addGroupSheet }
         .sheet(item: $addingCategoryToGroup) { group in addCategorySheet(group: group) }
         .sheet(item: $renamingCategory) { category in renameCategorySheet(category: category) }
+        .sheet(item: $renamingGroup) { group in renameGroupSheet(group: group) }
         .sheet(item: $settingTargetCategory) { category in targetSheet(category: category) }
         .task { reload() }
         .onReceive(NotificationCenter.default.publisher(for: .boardDidChange)) { _ in reload() }
@@ -109,15 +112,15 @@ struct BudgetView: View {
 
     private var breakdownCard: some View {
         VStack(alignment: .leading, spacing: 6) {
-            breakdownRow("Cash on hand", uncategorizedAllTimeCents)
-            breakdownRow("− Assigned to envelopes", -assignedAllTimeCents)
+            breakdownRow("Cash & savings", Money.wholeDollars(uncategorizedAllTimeCents))
+            breakdownRow("Assigned, not yet spent", "−" + Money.wholeDollars(assignedAllTimeCents))
             Divider().background(Theme.border)
             HStack {
-                Text("Unassigned Cash").font(.caption.bold()).foregroundStyle(Theme.text)
+                Text("Unassigned").font(.caption.bold()).foregroundStyle(Theme.text)
                 Spacer()
                 Text(Money.wholeDollars(unassignedCents)).font(.caption.bold()).foregroundStyle(Theme.text)
             }
-            Text("This is a stock, not a flow — it counts every assignment ever made, future months included.")
+            Text("Cash you hold today, less what your categories still hold across every month — future ones included. The same figure whichever month you are looking at: money assigned to next month is already spoken for.")
                 .font(.caption2).foregroundStyle(Theme.textMuted)
         }
         .padding()
@@ -125,11 +128,11 @@ struct BudgetView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
     }
 
-    private func breakdownRow(_ label: String, _ cents: Int) -> some View {
+    private func breakdownRow(_ label: String, _ value: String) -> some View {
         HStack {
             Text(label).font(.caption).foregroundStyle(Theme.textMuted)
             Spacer()
-            Text(Money.wholeDollars(cents)).font(.caption.bold()).foregroundStyle(Theme.text)
+            Text(value).font(.caption.bold()).foregroundStyle(Theme.text)
         }
     }
 
@@ -152,6 +155,7 @@ struct BudgetView: View {
                 Text(Money.exact(subtotal)).font(.caption.bold()).foregroundStyle(Theme.textMuted)
                 Menu {
                     Button("Add Category") { addingCategoryToGroup = group }
+                    Button("Rename Group") { renameGroupText = group.name; renamingGroup = group }
                     Button("Move Up") { categoriesRepo.moveGroup(id: group.id, direction: .up); reload() }
                     Button("Move Down") { categoriesRepo.moveGroup(id: group.id, direction: .down); reload() }
                     Button("Delete Group", role: .destructive) { categoriesRepo.deleteGroup(id: group.id); reload() }
@@ -182,7 +186,12 @@ struct BudgetView: View {
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text(category.displayName).font(.subheadline.bold()).foregroundStyle(Theme.text)
+                    HStack(spacing: 8) {
+                        if let icon = category.icon, !icon.isEmpty {
+                            Text(icon).font(.system(size: 17))
+                        }
+                        Text(category.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.text)
+                    }
                     Spacer()
                     Text(Money.exact(balance))
                         .font(.footnote.bold())
@@ -299,6 +308,26 @@ struct BudgetView: View {
                         reload()
                     }
                     .disabled(newCategoryName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func renameGroupSheet(group: CategoryGroup) -> some View {
+        NavigationStack {
+            Form {
+                TextField("Group name", text: $renameGroupText)
+            }
+            .navigationTitle("Rename")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { renamingGroup = nil } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        categoriesRepo.renameGroup(id: group.id, name: renameGroupText)
+                        renamingGroup = nil
+                        reload()
+                    }
+                    .disabled(renameGroupText.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
         }

@@ -165,6 +165,20 @@ enum Money {
         let dollars = Double(cents) / 100.0
         return dollars.formatted(.currency(code: "USD"))
     }
+
+    /// Ported from budgets-bro's `formatMoneyCompact` — keeps the sign so a
+    /// chart axis reads which side of zero a point is on, rather than
+    /// running "downhill" from a high floor to a low ceiling.
+    static func compact(_ cents: Int) -> String {
+        let dollars = abs(Double(cents)) / 100.0
+        let sign = cents < 0 ? "−" : ""
+        if dollars >= 1000 {
+            let thousands = dollars / 1000
+            let digits = dollars >= 10000 ? 0 : 1
+            return "\(sign)$\(thousands.formatted(.number.precision(.fractionLength(digits))))k"
+        }
+        return "\(sign)$\(Int(dollars.rounded()))"
+    }
 }
 
 private let isoDateFormatter: DateFormatter = {

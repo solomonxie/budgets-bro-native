@@ -64,15 +64,12 @@ private struct BottomTabBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Divider().background(Color.white.opacity(0.1))
+            Divider().background(Theme.border)
             HStack(spacing: 0) {
-                tabButton(.budget, label: "Budget")
-                Button(action: onSpendTap) {
-                    Text("+ Spend").font(.footnote).frame(maxWidth: .infinity)
-                }
-                .foregroundStyle(Theme.text)
-                tabButton(.accounts, label: "Accounts")
-                tabButton(.insights, label: "Insights")
+                tabButton(.budget, icon: .budget, label: "Budget")
+                spendButton
+                tabButton(.accounts, icon: .accounts, label: "Accounts")
+                tabButton(.insights, icon: .insights, label: "Insights")
             }
             .padding(.top, 10)
             .padding(.bottom, 6)
@@ -80,14 +77,30 @@ private struct BottomTabBar: View {
         .background(Theme.surface)
     }
 
-    private func tabButton(_ tab: RootTabView.Tab, label: String) -> some View {
-        Button {
+    private var spendButton: some View {
+        Button(action: onSpendTap) {
+            VStack(spacing: 4) {
+                TabBarIcon(name: .add, color: Theme.textMuted)
+                Text("Spend")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.textMuted)
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func tabButton(_ tab: RootTabView.Tab, icon: TabIconName, label: String) -> some View {
+        let tint = selectedTab == tab ? Theme.accent : Theme.textMuted
+        return Button {
             selectedTab = tab
         } label: {
-            Text(label)
-                .font(.footnote)
-                .foregroundStyle(selectedTab == tab ? Theme.accent : Theme.textMuted)
-                .frame(maxWidth: .infinity)
+            VStack(spacing: 4) {
+                TabBarIcon(name: icon, color: tint)
+                Text(label)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(tint)
+            }
+            .frame(maxWidth: .infinity)
         }
     }
 }
